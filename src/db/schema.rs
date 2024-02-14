@@ -10,6 +10,7 @@ diesel::table! {
 diesel::table! {
     pending_covenants (output_script) {
         output_script -> Binary,
+        status -> Integer,
         internal_key -> Binary,
         preimage -> Binary,
         swap_tree -> Text,

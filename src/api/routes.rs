@@ -15,7 +15,7 @@ use serde_json::json;
 use crate::api::types::RouterState;
 use crate::claimer::tree::SwapTree;
 use crate::db::helpers::insert_covenant;
-use crate::db::models::PendingCovenant;
+use crate::db::models::{PendingCovenant, PendingCovenantStatus};
 
 #[derive(Serialize, Deserialize)]
 struct EmptyResponse {}
@@ -116,11 +116,16 @@ pub async fn post_covenant_claim(
             blinding_key: blinding_key.unwrap(),
             swap_tree: json!(body.tree).to_string(),
             internal_key: body.internal_key.clone(),
+            status: PendingCovenantStatus::Pending.to_int(),
             address: elements::pset::serialize::Serialize::serialize(
                 &address_script.script_pubkey(),
             ),
             output_script: elements::pset::serialize::Serialize::serialize(
-                &body.tree.clone().address(body.internal_key).script_pubkey(),
+                &body
+                    .tree
+                    .clone()
+                    .address(body.internal_key, &state.address_params)
+                    .script_pubkey(),
             ),
         },
     ) {

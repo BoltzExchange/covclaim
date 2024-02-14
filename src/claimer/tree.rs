@@ -74,7 +74,7 @@ impl SwapTree {
         Ok(details)
     }
 
-    pub fn address(self, internal_key: Vec<u8>) -> Address {
+    pub fn address(self, internal_key: Vec<u8>, params: &'static AddressParams) -> Address {
         let key = Self::parse_key(internal_key);
 
         Address::p2tr(
@@ -85,8 +85,7 @@ impl SwapTree {
                 .unwrap()
                 .merkle_root(),
             None,
-            // TODO: configurable
-            &AddressParams::ELEMENTS,
+            params,
         )
     }
 
@@ -128,6 +127,7 @@ impl SwapTree {
 #[cfg(test)]
 mod swap_tree_tests {
     use elements::pset::serialize::Serialize;
+    use elements::AddressParams;
 
     use crate::claimer::tree::SwapTree;
 
@@ -159,7 +159,7 @@ mod swap_tree_tests {
 
         let address = serde_json::from_str::<SwapTree>(TREE_JSON)
             .unwrap()
-            .address(internal_key);
+            .address(internal_key, &AddressParams::ELEMENTS);
 
         assert_eq!(
             address.to_string(),

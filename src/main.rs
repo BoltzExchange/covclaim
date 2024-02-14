@@ -1,7 +1,8 @@
 use std::env;
 
 use dotenvy::dotenv;
-use log::{error, info};
+use elements::AddressParams;
+use log::{debug, error, info};
 
 mod api;
 mod chain;
@@ -63,8 +64,24 @@ async fn main() {
         .parse::<u32>()
         .expect("API_PORT invalid");
 
-    let server = api::server::start_server(db, server_host.as_str(), server_port);
+    let server =
+        api::server::start_server(db, get_address_params(), server_host.as_str(), server_port);
     info!("Started API server on: {}:{}", server_host, server_port);
 
     server.await.unwrap().expect("could not start server");
+}
+
+fn get_address_params() -> &'static AddressParams {
+    let network = env::var("NETWORK").expect("NETWORK must be set");
+    debug!("Using network: {network}");
+
+    match network.as_str() {
+        "mainnet" => &AddressParams::LIQUID,
+        "testnet" => &AddressParams::LIQUID_TESTNET,
+        "regtest" => &AddressParams::ELEMENTS,
+        &_ => {
+            error!("Could not parse network: {}", network);
+            std::process::exit(1);
+        }
+    }
 }

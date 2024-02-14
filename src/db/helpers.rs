@@ -1,12 +1,10 @@
-use diesel::insert_into;
 use diesel::prelude::*;
+use diesel::{insert_into, update};
 
 use crate::db;
-use crate::db::models::{Parameter, PendingCovenant};
-use crate::db::schema::parameters::dsl::*;
-use crate::db::schema::pending_covenants::dsl::*;
-
-// TODO: how to clean up covenants in the database?
+use crate::db::models::{Parameter, PendingCovenant, PendingCovenantStatus};
+use crate::db::schema::parameters;
+use crate::db::schema::pending_covenants;
 
 const BLOCK_HEIGHT_NAME: &str = "block_height";
 
@@ -16,18 +14,18 @@ pub fn upsert_block_height(con: db::Pool, height: u64) -> QueryResult<usize> {
         value: height.to_string(),
     };
 
-    insert_into(parameters)
+    insert_into(parameters::dsl::parameters)
         .values(&values)
-        .on_conflict(name)
+        .on_conflict(parameters::dsl::name)
         .do_update()
-        .set(value.eq(height.to_string()))
+        .set(parameters::dsl::value.eq(height.to_string()))
         .execute(&mut con.get().unwrap())
 }
 
 pub fn get_block_height(con: db::Pool) -> Option<u64> {
-    match parameters
+    match parameters::dsl::parameters
         .select(Parameter::as_select())
-        .filter(name.eq(BLOCK_HEIGHT_NAME))
+        .filter(parameters::dsl::name.eq(BLOCK_HEIGHT_NAME))
         .load(&mut con.get().unwrap())
     {
         Ok(res) => {
@@ -42,15 +40,23 @@ pub fn get_block_height(con: db::Pool) -> Option<u64> {
 }
 
 pub fn insert_covenant(con: db::Pool, covenant: PendingCovenant) -> QueryResult<usize> {
-    insert_into(pending_covenants)
+    insert_into(pending_covenants::dsl::pending_covenants)
         .values(&covenant)
         .execute(&mut con.get().unwrap())
 }
 
-pub fn get_covenant_for_output(con: db::Pool, script: &[u8]) -> Option<PendingCovenant> {
-    match pending_covenants
+pub fn set_covenant_claimed(con: db::Pool, output_script: Vec<u8>) -> QueryResult<usize> {
+    update(pending_covenants::dsl::pending_covenants)
+        .filter(pending_covenants::dsl::output_script.eq(output_script))
+        .set(pending_covenants::dsl::status.eq(PendingCovenantStatus::Claimed.to_int()))
+        .execute(&mut con.get().unwrap())
+}
+
+pub fn get_pending_covenant_for_output(con: db::Pool, script: &[u8]) -> Option<PendingCovenant> {
+    match pending_covenants::dsl::pending_covenants
         .select(PendingCovenant::as_select())
-        .filter(output_script.eq(script))
+        .filter(pending_covenants::dsl::output_script.eq(script))
+        .filter(pending_covenants::dsl::status.eq(PendingCovenantStatus::Pending.to_int()))
         .limit(1)
         .load(&mut con.get().unwrap())
     {

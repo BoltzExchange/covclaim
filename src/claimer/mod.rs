@@ -2,7 +2,6 @@ use crossbeam_channel::Receiver;
 use std::cmp;
 use std::error::Error;
 
-use elements::pset::serialize::Serialize;
 use elements::Transaction;
 use log::{debug, error, info, trace, warn};
 use rayon::iter::IntoParallelRefIterator;
@@ -12,7 +11,7 @@ use tokio::runtime::Builder;
 use crate::chain::client::ChainClient;
 use crate::claimer::constructor::Constructor;
 use crate::db;
-use crate::db::helpers::get_covenant_for_output;
+use crate::db::helpers::get_pending_covenant_for_output;
 
 pub mod constructor;
 pub mod tree;
@@ -187,18 +186,18 @@ impl Claimer {
         trace!(
             "Checking {} outputs of transaction: {}",
             tx.output.len(),
-            tx.txid()
+            tx.txid().to_string()
         );
 
         for vout in 0..tx.output.len() {
             let out = &tx.output[vout];
 
-            match get_covenant_for_output(self.db.clone(), out.script_pubkey.as_bytes()) {
+            match get_pending_covenant_for_output(self.db.clone(), out.script_pubkey.as_bytes()) {
                 Some(covenant) => {
                     info!(
                         "Found covenant {} to claim in {}:{}",
                         hex::encode(covenant.clone().output_script),
-                        hex::encode(tx.txid()),
+                        tx.txid().to_string(),
                         vout
                     );
                     match self
@@ -209,9 +208,9 @@ impl Claimer {
                     {
                         Ok(tx) => {
                             info!(
-                                "Broadcasted claim for {}: {:?}",
+                                "Broadcasted claim for {}: {}",
                                 hex::encode(covenant.clone().output_script),
-                                tx.txid().serialize(),
+                                tx.txid().to_string(),
                             )
                         }
                         Err(err) => {

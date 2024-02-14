@@ -5,6 +5,7 @@ CREATE TABLE parameters (
 
 CREATE TABLE pending_covenants (
     output_script BLOB PRIMARY KEY NOT NULL,
+    status INT NOT NULL,
     internal_key BLOB NOT NULL,
     preimage BLOB NOT NULL,
     swap_tree VARCHAR NOT NULL,
@@ -12,3 +13,5 @@ CREATE TABLE pending_covenants (
     blinding_key BLOB,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX pending_covenants_status_idx ON pending_covenants (status);

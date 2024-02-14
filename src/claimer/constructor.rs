@@ -2,10 +2,12 @@ use std::error::Error;
 
 use elements::bitcoin::Witness;
 use elements::confidential::{Asset, AssetBlindingFactor, Nonce, Value, ValueBlindingFactor};
+use elements::script::Builder;
 use elements::secp256k1_zkp::rand::rngs::OsRng;
 use elements::secp256k1_zkp::SecretKey;
 use elements::{
-    LockTime, OutPoint, Script, Sequence, Transaction, TxIn, TxInWitness, TxOut, TxOutWitness,
+    opcodes, LockTime, OutPoint, Script, Sequence, Transaction, TxIn, TxInWitness, TxOut,
+    TxOutWitness,
 };
 use log::{debug, trace};
 
@@ -45,10 +47,12 @@ impl Constructor {
         witness.push(Script::from(tree.clone().covenant_claim_leaf.output).as_bytes());
         witness.push(tree.control_block(covenant.clone().internal_key));
 
+        let secp = &SwapTree::secp();
+
         let is_blinded = prevout.asset.is_confidential() && prevout.value.is_confidential();
         let tx_secrets = match is_blinded {
             true => match prevout.unblind(
-                &SwapTree::secp(),
+                &secp,
                 match SecretKey::from_slice(
                     match covenant.clone().blinding_key {
                         Some(res) => res,
@@ -89,11 +93,12 @@ impl Constructor {
 
         if is_blinded {
             let mut rng = OsRng::default();
-            let secp = SwapTree::secp();
+
+            let op_return_script = Builder::new()
+                .push_opcode(opcodes::all::OP_RETURN)
+                .into_script();
 
             let out_abf = AssetBlindingFactor::new(&mut rng);
-
-            let op_return_script = Script::new_op_return(Vec::new().as_slice());
             let (blinded_asset, surjection_proof) = Asset::Explicit(utxo_asset).blind(
                 &mut rng,
                 &secp,
@@ -123,20 +128,16 @@ impl Constructor {
                     ),
                 ],
             );
-
-            let msg = elements::RangeProofMessage {
-                asset: utxo_asset,
-                bf: out_abf,
-            };
-            let ephemeral_sk = SecretKey::new(&mut rng);
-
             let (blinded_value, nonce, rangeproof) = Value::Explicit(1).blind(
                 &secp,
                 final_vbf,
                 SecretKey::new(&mut rng).public_key(&secp),
-                ephemeral_sk,
+                SecretKey::new(&mut rng),
                 &op_return_script.clone(),
-                &msg,
+                &elements::RangeProofMessage {
+                    asset: utxo_asset,
+                    bf: out_abf,
+                },
             )?;
 
             outs.push(TxOut {
@@ -182,7 +183,10 @@ impl Constructor {
         trace!("Broadcasting transaction {}", tx_hex);
 
         match self.chain_client.clone().send_raw_transaction(tx_hex).await {
-            Ok(_) => Ok(tx),
+            Ok(_) => match db::helpers::set_covenant_claimed(self.db, covenant.output_script) {
+                Ok(_) => Ok(tx),
+                Err(err) => Err(Box::new(err)),
+            },
             Err(err) => {
                 let err_str = err.to_string();
 

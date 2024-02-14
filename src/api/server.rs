@@ -3,14 +3,20 @@ use std::sync::Arc;
 
 use axum::routing::post;
 use axum::{Extension, Router};
+use elements::AddressParams;
 use tower_http::cors::CorsLayer;
 
 use crate::api;
 use crate::api::types::RouterState;
 use crate::db::Pool;
 
-pub async fn start_server(db: Pool, host: &str, port: u32) -> Result<Result<(), Error>, Error> {
-    let shared_state = Arc::new(RouterState { db });
+pub async fn start_server(
+    db: Pool,
+    address_params: &'static AddressParams,
+    host: &str,
+    port: u32,
+) -> Result<Result<(), Error>, Error> {
+    let shared_state = Arc::new(RouterState { db, address_params });
 
     let app = Router::new()
         .route("/covenant", post(api::routes::post_covenant_claim))
