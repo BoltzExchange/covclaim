@@ -1,0 +1,25 @@
+// @generated automatically by Diesel CLI.
+
+diesel::table! {
+    parameters (name) {
+        name -> Text,
+        value -> Text,
+    }
+}
+
+diesel::table! {
+    pending_covenants (output_script) {
+        output_script -> Binary,
+        internal_key -> Binary,
+        preimage -> Binary,
+        swap_tree -> Text,
+        address -> Binary,
+        blinding_key -> Nullable<Binary>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::allow_tables_to_appear_in_same_query!(
+    parameters,
+    pending_covenants,
+);

@@ -1,0 +1,32 @@
+[package]
+name = "covclaim"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[dependencies]
+tokio = { version = "1.36.0", features = ["full"] }
+axum = "0.7.4"
+diesel = { version = "2.1.4", features = ["postgres", "sqlite", "r2d2"] }
+dotenvy = "0.15.7"
+env_logger = "0.11.2"
+log = "0.4.20"
+zeromq = { version = "0.3.5", features = ["tokio", "tcp-transport"] }
+reqwest = { version = "0.11.24", features = ["json"] }
+serde_json = "1.0.113"
+base64 = "0.21.7"
+serde = { version = "1.0.196", features = ["derive"] }
+elements = { version = "0.24.1", features = ["serde"] }
+tower-http = { version = "0.5.1", features = ["cors"] }
+hex = { version = "0.4.3", features = ["alloc", "serde", "std"] }
+serde_with = "3.6.1"
+crossbeam-channel = "0.5.11"
+r2d2 = "0.8.10"
+rayon = "1.8.1"
+num_cpus = "1.16.0"
