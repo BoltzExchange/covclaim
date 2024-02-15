@@ -2,8 +2,8 @@ use std::error::Error;
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use elements::{Block, Transaction};
-use log::{debug, trace, warn};
-use zeromq::{Socket, SocketRecv, ZmqMessage};
+use log::{debug, error, trace, warn};
+use zeromq::{Socket, SocketRecv, ZmqError, ZmqMessage};
 
 use crate::chain::types::ZmqNotification;
 
@@ -29,10 +29,10 @@ impl ZmqClient {
         }
     }
 
-    pub async fn connect(self, notifications: Vec<ZmqNotification>) -> Option<Box<dyn Error>> {
+    pub async fn connect(self, notifications: Vec<ZmqNotification>) -> Result<(), Box<dyn Error>> {
         let raw_tx = match Self::find_notification("pubrawtx", notifications.clone()) {
             Some(data) => data,
-            None => return Some("pubrawtx ZMQ missing".into()),
+            None => return Err("pubrawtx ZMQ missing".into()),
         };
 
         let tx_sender = self.tx_sender.clone();
@@ -54,11 +54,11 @@ impl ZmqClient {
                 }
             };
         })
-        .await;
+        .await?;
 
         let raw_block = match Self::find_notification("pubrawblock", notifications.clone()) {
             Some(data) => data,
-            None => return Some("pubrawblock ZMQ missing".into()),
+            None => return Err("pubrawblock ZMQ missing".into()),
         };
 
         let block_sender = self.block_sender.clone();
@@ -85,14 +85,14 @@ impl ZmqClient {
         })
         .await?;
 
-        None
+        Ok(())
     }
 
     async fn subscribe<F>(
         notification: ZmqNotification,
         subscription: &str,
         handler: F,
-    ) -> Option<Box<dyn Error>>
+    ) -> Result<(), ZmqError>
     where
         F: Fn(ZmqMessage) -> () + Send + 'static,
     {
@@ -102,9 +102,9 @@ impl ZmqClient {
         );
 
         let mut socket = zeromq::SubSocket::new();
-        socket.connect(notification.address.as_str()).await.ok()?;
+        socket.connect(notification.address.as_str()).await?;
 
-        socket.subscribe(subscription).await.ok()?;
+        socket.subscribe(subscription).await?;
 
         tokio::spawn(async move {
             loop {
@@ -113,14 +113,14 @@ impl ZmqClient {
                         handler(recv);
                     }
                     Err(e) => {
-                        eprintln!("Error receiving data: {}", e);
+                        error!("Error receiving data: {}", e);
                         break;
                     }
                 }
             }
         });
 
-        None
+        Ok(())
     }
 
     fn find_notification(

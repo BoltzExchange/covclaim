@@ -71,8 +71,8 @@ impl ChainClient {
         let notifications = self.clone().get_zmq_notifications().await?;
 
         match self.zmq_client.clone().connect(notifications).await {
-            Some(e) => return Err(e),
-            None => {}
+            Err(e) => return Err(e),
+            _ => {}
         };
 
         Ok(self)
