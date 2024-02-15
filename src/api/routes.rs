@@ -6,7 +6,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{Extension, Json};
 use elements::hashes::Hash;
-use elements::secp256k1_zkp::SecretKey;
+use elements::secp256k1_zkp::{MusigKeyAggCache, PublicKey, SecretKey};
 use elements::{hashes, Address};
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -28,8 +28,12 @@ struct ErrorResponse {
 #[derive(Deserialize)]
 pub struct CovenantClaimRequest {
     #[serde(with = "hex::serde")]
-    #[serde(rename = "internalKey")]
-    pub internal_key: Vec<u8>,
+    #[serde(rename = "claimPublicKey")]
+    pub claim_public_key: Vec<u8>,
+
+    #[serde(with = "hex::serde")]
+    #[serde(rename = "refundPublicKey")]
+    pub refund_public_key: Vec<u8>,
 
     #[serde(with = "hex::serde")]
     pub preimage: Vec<u8>,
@@ -102,6 +106,29 @@ pub async fn post_covenant_claim(
         }
     };
 
+    let aggregate = MusigKeyAggCache::new(
+        &SwapTree::secp(),
+        &[
+            match PublicKey::from_slice(body.refund_public_key.as_ref()) {
+                Ok(res) => res,
+                Err(err) => {
+                    return CovenantClaimResponse::Error(ErrorResponse {
+                        error: format!("could not parse refundPublicKey: {}", err.to_string()),
+                    })
+                }
+            },
+            match PublicKey::from_slice(body.claim_public_key.as_ref()) {
+                Ok(res) => res,
+                Err(err) => {
+                    return CovenantClaimResponse::Error(ErrorResponse {
+                        error: format!("could not parse claimPublicKey: {}", err.to_string()),
+                    })
+                }
+            },
+        ],
+    );
+    let internal_key = Vec::from(aggregate.agg_pk().serialize());
+
     let preimage_hash: hashes::hash160::Hash = Hash::hash(body.preimage.clone().as_ref());
     if Vec::from(preimage_hash.as_byte_array()) != covenant_details.preimage_hash {
         return CovenantClaimResponse::Error(ErrorResponse {
@@ -115,7 +142,7 @@ pub async fn post_covenant_claim(
             preimage: body.preimage,
             blinding_key: blinding_key.unwrap(),
             swap_tree: json!(body.tree).to_string(),
-            internal_key: body.internal_key.clone(),
+            internal_key: internal_key.clone(),
             status: PendingCovenantStatus::Pending.to_int(),
             address: elements::pset::serialize::Serialize::serialize(
                 &address_script.script_pubkey(),
@@ -124,7 +151,7 @@ pub async fn post_covenant_claim(
                 &body
                     .tree
                     .clone()
-                    .address(body.internal_key, &state.address_params)
+                    .address(internal_key, &state.address_params)
                     .script_pubkey(),
             ),
             tx_id: None,

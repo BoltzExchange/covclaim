@@ -16,7 +16,8 @@ With these values in the request body:
 
 ```JSON
 {
-  "internalKey": "<aggregated public key of the swap>",
+  "claimPublicKey": "<public key of the user>",
+  "refundPublicKey": "<public key of Boltz>",
   "preimage": "<preimage of the swap>",
   "blindingKey": "<blinding key of the lockup address of the swap>",
   "address": "<address to which the covenant should be claimed>",
