@@ -11,6 +11,8 @@ CREATE TABLE pending_covenants (
     swap_tree VARCHAR NOT NULL,
     address BLOB NOT NULL,
     blinding_key BLOB,
+    tx_id BLOB,
+    tx_time DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

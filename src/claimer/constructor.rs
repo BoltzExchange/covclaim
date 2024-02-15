@@ -1,4 +1,6 @@
+use diesel::internal::derives::multiconnection::chrono::{TimeDelta, Utc};
 use std::error::Error;
+use std::ops::Sub;
 
 use elements::bitcoin::Witness;
 use elements::confidential::{Asset, AssetBlindingFactor, Nonce, Value, ValueBlindingFactor};
@@ -6,10 +8,11 @@ use elements::script::Builder;
 use elements::secp256k1_zkp::rand::rngs::OsRng;
 use elements::secp256k1_zkp::SecretKey;
 use elements::{
-    opcodes, LockTime, OutPoint, Script, Sequence, Transaction, TxIn, TxInWitness, TxOut,
-    TxOutWitness,
+    opcodes, AddressParams, LockTime, OutPoint, Script, Sequence, Transaction, TxIn, TxInWitness,
+    TxOut, TxOutWitness,
 };
-use log::{debug, trace};
+use log::{debug, error, info, trace, warn};
+use tokio::time;
 
 use crate::chain::client::ChainClient;
 use crate::claimer::tree::SwapTree;
@@ -20,26 +23,163 @@ use crate::db::models::PendingCovenant;
 pub struct Constructor {
     db: db::Pool,
     chain_client: ChainClient,
+    sweep_time: u64,
+    sweep_interval: u64,
+    address_params: &'static AddressParams,
 }
 
 impl Constructor {
-    pub fn new(db: db::Pool, chain_client: ChainClient) -> Constructor {
-        Constructor { db, chain_client }
+    pub fn new(
+        db: db::Pool,
+        chain_client: ChainClient,
+        sweep_time: u64,
+        sweep_interval: u64,
+        address_params: &'static AddressParams,
+    ) -> Constructor {
+        Constructor {
+            db,
+            sweep_time,
+            chain_client,
+            address_params,
+            sweep_interval,
+        }
     }
 
-    pub async fn broadcast_claim(
+    pub async fn start_interval(self) {
+        if self.clone().claim_instantly() {
+            info!("Broadcasting sweeps instantly");
+            return;
+        }
+
+        info!(
+            "Broadcasting claims {} seconds after lockup transactions and checking on interval of {} seconds",
+            self.sweep_time,
+            self.sweep_interval
+        );
+        let mut interval = time::interval(time::Duration::from_secs(self.sweep_interval));
+
+        self.clone().broadcast().await;
+
+        loop {
+            interval.tick().await;
+
+            trace!("Checking for claims to broadcast");
+            self.clone().broadcast().await;
+        }
+    }
+
+    pub async fn schedule_broadcast(self, covenant: PendingCovenant, lockup_tx: Transaction) {
+        if self.clone().claim_instantly() {
+            self.broadcast_covenant(covenant, lockup_tx).await;
+            return;
+        }
+
+        debug!(
+            "Scheduling claim of {}",
+            hex::encode(covenant.output_script.clone())
+        );
+        match db::helpers::set_covenant_transaction(
+            self.db,
+            covenant.output_script,
+            hex::decode(lockup_tx.txid().to_string()).unwrap(),
+            Utc::now().naive_utc(),
+        ) {
+            Ok(_) => {}
+            Err(err) => {
+                warn!("Could not schedule covenant claim: {}", err);
+                return;
+            }
+        };
+    }
+
+    async fn broadcast(self) {
+        let covenants = match db::helpers::get_covenants_to_claim(
+            self.clone().db,
+            Utc::now()
+                .sub(TimeDelta::seconds(self.sweep_time as i64))
+                .naive_utc(),
+        ) {
+            Ok(res) => res,
+            Err(err) => {
+                warn!("Could not fetch covenants to claim: {}", err);
+                return;
+            }
+        };
+
+        if covenants.len() == 0 {
+            return;
+        }
+
+        debug!("Broadcasting {} claims", covenants.len());
+
+        let self_clone = self.clone();
+        for cov in covenants {
+            let tx = match self_clone
+                .clone()
+                .chain_client
+                .get_transaction(hex::encode(cov.tx_id.clone().unwrap()))
+                .await
+            {
+                Ok(res) => res,
+                Err(err) => {
+                    error!(
+                        "Could not fetch transaction for {}: {}",
+                        hex::encode(cov.clone().output_script),
+                        err
+                    );
+                    return;
+                }
+            };
+
+            self_clone.clone().broadcast_covenant(cov, tx).await;
+        }
+    }
+
+    async fn broadcast_covenant(self, cov: PendingCovenant, tx: Transaction) {
+        match self.clone().broadcast_tx(cov.clone(), tx).await {
+            Ok(tx) => {
+                info!(
+                    "Broadcast claim for {}: {}",
+                    hex::encode(cov.clone().output_script),
+                    tx.txid().to_string(),
+                )
+            }
+            Err(err) => {
+                error!(
+                    "Could not broadcast claim for {}: {}",
+                    hex::encode(cov.clone().output_script),
+                    err
+                )
+            }
+        }
+    }
+
+    async fn broadcast_tx(
         self,
         covenant: PendingCovenant,
         lockup_tx: Transaction,
-        vout: u32,
-        prevout: &TxOut,
-    ) -> Result<Transaction, Box<dyn Error>> {
+    ) -> Result<Transaction, Box<dyn Error + Send + Sync>> {
+        let tree = serde_json::from_str::<SwapTree>(covenant.swap_tree.as_str()).unwrap();
+        let (prevout, vout) = match tree.clone().find_output(
+            lockup_tx.clone(),
+            covenant.clone().internal_key,
+            self.address_params,
+        ) {
+            Some(res) => res,
+            None => {
+                return Err(format!(
+                    "could not find swap output for {}",
+                    hex::encode(covenant.output_script)
+                )
+                .into());
+            }
+        };
+
         debug!(
             "Broadcasting claim for: {}",
             hex::encode(covenant.clone().output_script)
         );
 
-        let tree = serde_json::from_str::<SwapTree>(covenant.swap_tree.as_str()).unwrap();
         let cov_details = tree.clone().covenant_details().unwrap();
 
         let mut witness = Witness::new();
@@ -195,9 +335,13 @@ impl Constructor {
                 {
                     Ok(tx)
                 } else {
-                    Err(err)
+                    Err(err.to_string().into())
                 }
             }
         }
+    }
+
+    fn claim_instantly(self) -> bool {
+        self.sweep_interval == 0
     }
 }

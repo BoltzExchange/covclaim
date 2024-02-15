@@ -1,3 +1,4 @@
+use diesel::internal::derives::multiconnection::chrono;
 use diesel::prelude::*;
 use diesel::{insert_into, update};
 
@@ -45,11 +46,38 @@ pub fn insert_covenant(con: db::Pool, covenant: PendingCovenant) -> QueryResult<
         .execute(&mut con.get().unwrap())
 }
 
+pub fn set_covenant_transaction(
+    con: db::Pool,
+    output_script: Vec<u8>,
+    tx_id: Vec<u8>,
+    time: chrono::NaiveDateTime,
+) -> QueryResult<usize> {
+    update(pending_covenants::dsl::pending_covenants)
+        .filter(pending_covenants::dsl::output_script.eq(output_script))
+        .set((
+            pending_covenants::dsl::status.eq(PendingCovenantStatus::TransactionFound.to_int()),
+            pending_covenants::dsl::tx_id.eq(tx_id),
+            pending_covenants::dsl::tx_time.eq(time),
+        ))
+        .execute(&mut con.get().unwrap())
+}
+
 pub fn set_covenant_claimed(con: db::Pool, output_script: Vec<u8>) -> QueryResult<usize> {
     update(pending_covenants::dsl::pending_covenants)
         .filter(pending_covenants::dsl::output_script.eq(output_script))
         .set(pending_covenants::dsl::status.eq(PendingCovenantStatus::Claimed.to_int()))
         .execute(&mut con.get().unwrap())
+}
+
+pub fn get_covenants_to_claim(
+    con: db::Pool,
+    max_time: chrono::NaiveDateTime,
+) -> QueryResult<Vec<PendingCovenant>> {
+    pending_covenants::dsl::pending_covenants
+        .select(PendingCovenant::as_select())
+        .filter(pending_covenants::dsl::status.eq(PendingCovenantStatus::TransactionFound.to_int()))
+        .filter(pending_covenants::dsl::tx_time.le(max_time))
+        .load(&mut con.get().unwrap())
 }
 
 pub fn get_pending_covenant_for_output(con: db::Pool, script: &[u8]) -> Option<PendingCovenant> {

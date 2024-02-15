@@ -2,7 +2,7 @@ use crossbeam_channel::Receiver;
 use std::cmp;
 use std::error::Error;
 
-use elements::Transaction;
+use elements::{AddressParams, Transaction};
 use log::{debug, error, info, trace, warn};
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
@@ -26,9 +26,21 @@ pub struct Claimer {
 }
 
 impl Claimer {
-    pub fn new(db: db::Pool, chain_client: ChainClient) -> Claimer {
+    pub fn new(
+        db: db::Pool,
+        chain_client: ChainClient,
+        sweep_time: u64,
+        sweep_interval: u64,
+        address_param: &'static AddressParams,
+    ) -> Claimer {
         Claimer {
-            constructor: Constructor::new(db.clone(), chain_client.clone()),
+            constructor: Constructor::new(
+                db.clone(),
+                chain_client.clone(),
+                sweep_time,
+                sweep_interval,
+                address_param,
+            ),
             db,
             chain_client,
         }
@@ -36,6 +48,11 @@ impl Claimer {
 
     pub fn start(self) {
         debug!("Starting claimer");
+        let constructor_clone = self.constructor.clone();
+        tokio::spawn(async move {
+            constructor_clone.start_interval().await;
+        });
+
         let tx_clone = self.clone();
         let tx_receiver = self.clone().chain_client.get_tx_receiver();
         tokio::spawn(async move {
@@ -200,27 +217,11 @@ impl Claimer {
                         tx.txid().to_string(),
                         vout
                     );
-                    match self
+
+                    self.clone()
                         .constructor
-                        .clone()
-                        .broadcast_claim(covenant.clone(), tx.clone(), vout as u32, out)
-                        .await
-                    {
-                        Ok(tx) => {
-                            info!(
-                                "Broadcasted claim for {}: {}",
-                                hex::encode(covenant.clone().output_script),
-                                tx.txid().to_string(),
-                            )
-                        }
-                        Err(err) => {
-                            error!(
-                                "Could not broadcast claim for {}: {}",
-                                hex::encode(covenant.clone().output_script),
-                                err
-                            )
-                        }
-                    };
+                        .schedule_broadcast(covenant, tx.clone())
+                        .await;
                 }
                 None => {}
             };

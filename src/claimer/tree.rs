@@ -4,7 +4,7 @@ use elements::bitcoin::XOnlyPublicKey;
 use elements::script::Instruction;
 use elements::secp256k1_zkp::{All, Secp256k1};
 use elements::taproot::{LeafVersion, TaprootBuilder};
-use elements::{Address, AddressParams, Script};
+use elements::{Address, AddressParams, Script, Transaction, TxOut};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -87,6 +87,26 @@ impl SwapTree {
             None,
             params,
         )
+    }
+
+    pub fn find_output(
+        self,
+        lockup_tx: Transaction,
+        internal_key: Vec<u8>,
+        params: &'static AddressParams,
+    ) -> Option<(TxOut, u32)> {
+        let script_pubkey = self.address(internal_key, params).script_pubkey();
+
+        let mut vout: u32 = 0;
+        for out in lockup_tx.output {
+            if out.script_pubkey.eq(&script_pubkey) {
+                return Some((out, vout));
+            }
+
+            vout += 1;
+        }
+
+        None
     }
 
     pub fn control_block(self, internal_key: Vec<u8>) -> Vec<u8> {

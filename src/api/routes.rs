@@ -127,6 +127,8 @@ pub async fn post_covenant_claim(
                     .address(body.internal_key, &state.address_params)
                     .script_pubkey(),
             ),
+            tx_id: None,
+            tx_time: None,
         },
     ) {
         Ok(_) => {

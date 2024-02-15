@@ -16,6 +16,8 @@ diesel::table! {
         swap_tree -> Text,
         address -> Binary,
         blinding_key -> Nullable<Binary>,
+        tx_id -> Nullable<Binary>,
+        tx_time -> Nullable<Timestamp>,
         created_at -> Timestamp,
     }
 }

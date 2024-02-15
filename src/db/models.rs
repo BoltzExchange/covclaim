@@ -1,8 +1,10 @@
+use diesel::internal::derives::multiconnection::chrono;
 use diesel::prelude::*;
 
 pub enum PendingCovenantStatus {
     Pending = 0,
-    Claimed = 1,
+    TransactionFound = 1,
+    Claimed = 2,
 }
 
 impl PendingCovenantStatus {
@@ -13,7 +15,6 @@ impl PendingCovenantStatus {
 
 #[derive(Queryable, Selectable, Insertable, AsChangeset)]
 #[diesel(table_name = crate::db::schema::parameters)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Parameter {
     pub name: String,
     pub value: String,
@@ -21,7 +22,6 @@ pub struct Parameter {
 
 #[derive(Queryable, Selectable, Insertable, AsChangeset, Clone)]
 #[diesel(table_name = crate::db::schema::pending_covenants)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PendingCovenant {
     pub output_script: Vec<u8>,
     pub status: i32,
@@ -30,4 +30,6 @@ pub struct PendingCovenant {
     pub swap_tree: String,
     pub address: Vec<u8>,
     pub blinding_key: Option<Vec<u8>>,
+    pub tx_id: Option<Vec<u8>>,
+    pub tx_time: Option<chrono::NaiveDateTime>,
 }
