@@ -2,6 +2,7 @@
 name = "covclaim"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [profile.release]
 strip = true
@@ -14,6 +15,7 @@ panic = "abort"
 tokio = { version = "1.36.0", features = ["full"] }
 axum = "0.7.4"
 diesel = { version = "2.1.4", features = ["sqlite", "r2d2", "chrono"] }
+diesel_migrations = "2.1.0"
 dotenvy = "0.15.7"
 env_logger = "0.11.2"
 log = "0.4.20"
@@ -30,3 +32,6 @@ crossbeam-channel = "0.5.11"
 r2d2 = "0.8.10"
 rayon = "1.8.1"
 num_cpus = "1.16.0"
+
+[build-dependencies]
+built = { version = "0.7.1", features = ["git2"] }

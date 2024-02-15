@@ -9,10 +9,25 @@ mod chain;
 mod claimer;
 mod db;
 
+pub mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 #[tokio::main]
 async fn main() {
     dotenv().expect("could not read env file");
     env_logger::init();
+
+    info!(
+        "Starting covclaim v{}-{}",
+        built_info::PKG_VERSION,
+        built_info::GIT_VERSION.unwrap_or("")
+    );
+    debug!(
+        "Compiled with {} for {}",
+        built_info::RUSTC_VERSION,
+        built_info::TARGET
+    );
 
     let network_params = get_address_params();
 
