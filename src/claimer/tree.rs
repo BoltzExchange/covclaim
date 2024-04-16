@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use elements::bitcoin::opcodes::all::OP_PUSHNUM_NEG1;
 use elements::bitcoin::XOnlyPublicKey;
 use elements::script::Instruction;
 use elements::secp256k1_zkp::{All, Secp256k1};
@@ -59,14 +60,18 @@ impl SwapTree {
                         }
                         _ => {}
                     },
-                    Instruction::Op(_) => {
-                        position += 1;
+                    Instruction::Op(op) => {
+                        // For SegWit addresses that is a push operation;
+                        // we skip incrementing the counter so that we can use the same match statement
+                        if op.into_u8() != OP_PUSHNUM_NEG1.to_u8() {
+                            position += 1;
+                        }
                     }
                 },
                 Err(err) => {
                     return Err(
                         format!("could not iterate over covenant claim script: {}", err).into(),
-                    )
+                    );
                 }
             }
         }
@@ -204,6 +209,35 @@ mod swap_tree_tests {
         assert_eq!(
             hex::encode(details.preimage_hash),
             "af8b5215948249f6e10adddc531ffe5d4428b917"
+        );
+    }
+
+    #[test]
+    fn covenant_details_legacy() {
+        let swap: SwapTree = serde_json::from_str("{
+    \"claimLeaf\": {
+      \"version\": 196,
+      \"output\": \"82012088a9149eabdcb6a7e19a6a1cf082f8ef261d4c7ce6d25688204f3b8fed02c3eaf785bdcbc45e6e7a811e9062c6a681f1b3d0f51bd8c359206cac\"
+    },
+    \"refundLeaf\": {
+      \"version\": 196,
+      \"output\": \"203e2100f5b5f7100a972f21cd17526f3f79e157128323aa0ab124c1baa33f9ee6ad0372fd2ab1\"
+    },
+    \"covenantClaimLeaf\": {
+      \"version\": 196,
+      \"output\": \"82012088a9149eabdcb6a7e19a6a1cf082f8ef261d4c7ce6d2568800d14f8820b80f397fe1edcb87e54ce9cd5b4a5896b19e7d577b3bb868c4eb7ff1c3a5bb938800ce5188206d521c38ec1ea15734ae22b7c46064412829c0d0579f0a713d1c04ede979026f8800cf7508542500000000000087\"
+    }
+  }").unwrap();
+        let details = swap.covenant_details().unwrap();
+
+        assert_eq!(details.expected_amount, 9556);
+        assert_eq!(
+            hex::encode(details.expected_output),
+            "b80f397fe1edcb87e54ce9cd5b4a5896b19e7d577b3bb868c4eb7ff1c3a5bb93"
+        );
+        assert_eq!(
+            hex::encode(details.preimage_hash),
+            "9eabdcb6a7e19a6a1cf082f8ef261d4c7ce6d256"
         );
     }
 
