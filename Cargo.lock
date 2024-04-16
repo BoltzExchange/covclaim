@@ -520,7 +520,8 @@ checksum = "a47c1c47d2f5964e29c61246e81db715514cd532db6b5116a25ea3c03d6780a2"
 [[package]]
 name = "elements"
 version = "0.24.1"
-source = "git+https://github.com/michael1011/rust-elements?branch=master#3d16cd003d20f9f3e83633b4a3009bc3018a3de2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6b8388053196e6b2702a45418078a654680ce9e1fd91799f51f67a40118ff5"
 dependencies = [
  "bitcoin",
  "secp256k1-zkp",
@@ -1552,7 +1553,7 @@ dependencies = [
 [[package]]
 name = "secp256k1-zkp"
 version = "0.10.0"
-source = "git+https://github.com/sanket1729/rust-secp256k1-zkp.git?branch=pr29#60e631c24588a0c9e271badd61959294848c665d"
+source = "git+https://github.com/BlockstreamResearch/rust-secp256k1-zkp.git?rev=60e631c24588a0c9e271badd61959294848c665d#60e631c24588a0c9e271badd61959294848c665d"
 dependencies = [
  "bitcoin-private",
  "rand",
@@ -1564,7 +1565,7 @@ dependencies = [
 [[package]]
 name = "secp256k1-zkp-sys"
 version = "0.9.1"
-source = "git+https://github.com/sanket1729/rust-secp256k1-zkp.git?branch=pr29#60e631c24588a0c9e271badd61959294848c665d"
+source = "git+https://github.com/BlockstreamResearch/rust-secp256k1-zkp.git?rev=60e631c24588a0c9e271badd61959294848c665d#60e631c24588a0c9e271badd61959294848c665d"
 dependencies = [
  "cc",
  "secp256k1-sys",
