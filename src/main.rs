@@ -1,5 +1,8 @@
 use std::env;
+use std::sync::Arc;
 
+use crate::chain::esplora::EsploraClient;
+use crate::chain::types::ChainBackend;
 use dotenvy::dotenv;
 use elements::AddressParams;
 use log::{debug, error, info};
@@ -44,33 +47,17 @@ async fn main() {
     };
     info!("Connected to database");
 
-    let elements = match chain::client::ChainClient::new(
-        env::var("ELEMENTS_HOST").expect("ELEMENTS_HOST must be set"),
-        env::var("ELEMENTS_PORT")
-            .expect("ELEMENTS_PORT must be est")
-            .parse::<u32>()
-            .expect("ELEMENTS_PORT invalid"),
-        env::var("ELEMENTS_COOKIE").expect("ELEMENTS_COOKIE must be set"),
-    )
-    .connect()
-    .await
-    {
-        Ok(client) => client,
-        Err(err) => {
-            error!("Could not connect to Elements client: {}", err);
-            std::process::exit(1);
-        }
-    };
+    let elements = get_chain_backend().await;
 
-    let connect_res = match elements.clone().get_network_info().await {
+    let connect_res = match elements.get_network_info().await {
         Ok(res) => res,
         Err(err) => {
-            error!("Could not connect to Elements: {}", err);
+            error!("Could not connect to chain backend: {}", err);
             std::process::exit(1);
         }
     };
 
-    info!("Connected to Elements: {}", connect_res.subversion);
+    info!("Connected to chain backend: {}", connect_res.subversion);
 
     let claimer = claimer::Claimer::new(
         db.clone(),
@@ -97,6 +84,60 @@ async fn main() {
     info!("Started API server on: {}:{}", server_host, server_port);
 
     server.await.unwrap().expect("could not start server");
+}
+
+async fn get_chain_backend() -> Arc<Box<dyn ChainBackend + Send + Sync>> {
+    let backend = env::var("CHAIN_BACKEND").unwrap_or("elements".to_string());
+    info!("Using {} chain backend", backend);
+    let client: Box<dyn ChainBackend + Send + Sync> = match backend.as_str() {
+        "elements" => {
+            match chain::client::ChainClient::new(
+                env::var("ELEMENTS_HOST").expect("ELEMENTS_HOST must be set"),
+                env::var("ELEMENTS_PORT")
+                    .expect("ELEMENTS_PORT must be est")
+                    .parse::<u32>()
+                    .expect("ELEMENTS_PORT invalid"),
+                env::var("ELEMENTS_COOKIE").expect("ELEMENTS_COOKIE must be set"),
+            )
+            .connect()
+            .await
+            {
+                Ok(client) => Box::new(client),
+                Err(err) => {
+                    error!("Could not connect to Elements client: {}", err);
+                    std::process::exit(1);
+                }
+            }
+        }
+        "esplora" => {
+            match EsploraClient::new(
+                env::var("ESPLORA_ENDPOINT").expect("ESPLORA_ENDPOINT must be set"),
+                env::var("ESPLORA_POLL_INTERVAL")
+                    .expect("ESPLORA_POLL_INTERVAL must be set")
+                    .parse::<u64>()
+                    .expect("ESPLORA_POLL_INTERVAL invalid"),
+                env::var("ESPLORA_MAX_REQUESTS_PER_SECOND")
+                    .expect("ESPLORA_MAX_REQUESTS_PER_SECOND must be set")
+                    .parse::<u64>()
+                    .expect("ESPLORA_MAX_REQUESTS_PER_SECOND invalid"),
+            ) {
+                Ok(client) => {
+                    client.connect();
+                    Box::new(client)
+                }
+                Err(err) => {
+                    error!("Could not create Esplora client: {}", err);
+                    std::process::exit(1);
+                }
+            }
+        }
+        &_ => {
+            error!("Unknown chain backend: {}", backend);
+            std::process::exit(1);
+        }
+    };
+
+    return Arc::new(client);
 }
 
 fn get_address_params() -> &'static AddressParams {

@@ -1,3 +1,5 @@
 pub mod client;
-mod types;
+pub mod esplora;
+pub mod types;
+mod utils;
 mod zmq;

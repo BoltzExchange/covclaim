@@ -1,14 +1,14 @@
 use crossbeam_channel::Receiver;
-use std::cmp;
-use std::error::Error;
-
 use elements::{AddressParams, Transaction};
 use log::{debug, error, info, trace, warn};
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
+use std::cmp;
+use std::error::Error;
+use std::sync::Arc;
 use tokio::runtime::Builder;
 
-use crate::chain::client::ChainClient;
+use crate::chain::types::ChainBackend;
 use crate::claimer::constructor::Constructor;
 use crate::db;
 use crate::db::helpers::get_pending_covenant_for_output;
@@ -21,14 +21,14 @@ const MAX_PARALLEL_REQUESTS: usize = 15;
 #[derive(Clone)]
 pub struct Claimer {
     db: db::Pool,
-    chain_client: ChainClient,
+    chain_client: Arc<Box<dyn ChainBackend + Send + Sync>>,
     constructor: Constructor,
 }
 
 impl Claimer {
     pub fn new(
         db: db::Pool,
-        chain_client: ChainClient,
+        chain_client: Arc<Box<dyn ChainBackend + Send + Sync>>,
         sweep_time: u64,
         sweep_interval: u64,
         address_param: &'static AddressParams,
@@ -113,7 +113,7 @@ impl Claimer {
     }
 
     async fn rescan(self) -> Result<u64, Box<dyn Error>> {
-        let block_count = self.chain_client.clone().get_block_count().await?;
+        let block_count = self.chain_client.get_block_count().await?;
         trace!("Current block height: {}", block_count);
 
         let rescan_height = match db::helpers::get_block_height(self.db.clone()) {
@@ -156,26 +156,22 @@ impl Claimer {
                 while let Ok(height) = receiver.recv() {
                     let self_clone = self_clone.clone();
                     runtime.block_on(async move {
-                        let block_hash =
-                            match self_clone.chain_client.clone().get_block_hash(height).await {
-                                Ok(res) => res,
-                                Err(err) => {
-                                    error!("Could not get block hash of {}: {}", height, err);
-                                    return;
-                                }
-                            };
-                        let block = match self_clone
-                            .chain_client
-                            .clone()
-                            .get_block(block_hash.clone())
-                            .await
+                        let block_hash = match self_clone.chain_client.get_block_hash(height).await
                         {
                             Ok(res) => res,
                             Err(err) => {
-                                error!("Could not get block {}: {}", block_hash, err);
+                                error!("Could not get block hash of {}: {}", height, err);
                                 return;
                             }
                         };
+                        let block =
+                            match self_clone.chain_client.get_block(block_hash.clone()).await {
+                                Ok(res) => res,
+                                Err(err) => {
+                                    error!("Could not get block {}: {}", block_hash, err);
+                                    return;
+                                }
+                            };
 
                         debug!(
                             "Rescanning block {} ({}) with {} transactions",

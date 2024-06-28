@@ -1,7 +1,4 @@
 use diesel::internal::derives::multiconnection::chrono::{TimeDelta, Utc};
-use std::error::Error;
-use std::ops::Sub;
-
 use elements::bitcoin::Witness;
 use elements::confidential::{Asset, AssetBlindingFactor, Nonce, Value, ValueBlindingFactor};
 use elements::script::Builder;
@@ -12,9 +9,12 @@ use elements::{
     TxOut, TxOutWitness,
 };
 use log::{debug, error, info, trace, warn};
+use std::error::Error;
+use std::ops::Sub;
+use std::sync::Arc;
 use tokio::time;
 
-use crate::chain::client::ChainClient;
+use crate::chain::types::ChainBackend;
 use crate::claimer::tree::SwapTree;
 use crate::db;
 use crate::db::models::PendingCovenant;
@@ -22,7 +22,7 @@ use crate::db::models::PendingCovenant;
 #[derive(Clone)]
 pub struct Constructor {
     db: db::Pool,
-    chain_client: ChainClient,
+    chain_client: Arc<Box<dyn ChainBackend + Send + Sync>>,
     sweep_time: u64,
     sweep_interval: u64,
     address_params: &'static AddressParams,
@@ -31,7 +31,7 @@ pub struct Constructor {
 impl Constructor {
     pub fn new(
         db: db::Pool,
-        chain_client: ChainClient,
+        chain_client: Arc<Box<dyn ChainBackend + Send + Sync>>,
         sweep_time: u64,
         sweep_interval: u64,
         address_params: &'static AddressParams,
@@ -322,7 +322,7 @@ impl Constructor {
         let tx_hex = hex::encode(elements::pset::serialize::Serialize::serialize(&tx));
         trace!("Broadcasting transaction {}", tx_hex);
 
-        match self.chain_client.clone().send_raw_transaction(tx_hex).await {
+        match self.chain_client.send_raw_transaction(tx_hex).await {
             Ok(_) => match db::helpers::set_covenant_claimed(self.db, covenant.output_script) {
                 Ok(_) => Ok(tx),
                 Err(err) => Err(Box::new(err)),
