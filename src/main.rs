@@ -1,8 +1,8 @@
-use std::env;
-
 use dotenvy::dotenv;
 use elements::AddressParams;
 use log::{debug, error, info};
+use std::env;
+use std::sync::Arc;
 
 mod api;
 mod chain;
@@ -74,7 +74,7 @@ async fn main() {
 
     let claimer = claimer::Claimer::new(
         db.clone(),
-        elements,
+        Arc::new(Box::new(elements)),
         env::var("SWEEP_TIME")
             .expect("SWEEP_TIME must be set")
             .parse::<u64>()
