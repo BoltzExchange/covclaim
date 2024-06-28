@@ -10,5 +10,4 @@ pub struct ZmqNotification {
     #[serde(rename = "type")]
     pub notification_type: String,
     pub address: String,
-    pub hwm: u64,
 }

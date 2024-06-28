@@ -12,23 +12,23 @@ codegen-units = 1
 panic = "abort"
 
 [dependencies]
-tokio = { version = "1.37.0", features = ["full"] }
+tokio = { version = "1.38.0", features = ["full"] }
 axum = "0.7.5"
-diesel = { version = "2.1.5", features = ["sqlite", "r2d2", "chrono"] }
-diesel_migrations = "2.1.0"
+diesel = { version = "2.2.1", features = ["sqlite", "r2d2", "chrono"] }
+diesel_migrations = "2.2.0"
 dotenvy = "0.15.7"
 env_logger = "0.11.3"
-log = "0.4.21"
-zeromq = { version = "0.3.5", features = ["tokio", "tcp-transport"] }
-reqwest = { version = "0.11.27", features = ["json"] }
-serde_json = "1.0.116"
-base64 = "0.22.0"
-serde = { version = "1.0.198", features = ["derive"] }
+log = "0.4.22"
+zeromq = { version = "0.4.0", features = ["tokio", "tcp-transport"] }
+reqwest = { version = "0.12.5", features = ["json"] }
+serde_json = "1.0.118"
+base64 = "0.22.1"
+serde = { version = "1.0.203", features = ["derive"] }
 elements = { version = "0.24.1", features = ["serde"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
 hex = { version = "0.4.3", features = ["alloc", "serde", "std"] }
-serde_with = "3.7.0"
-crossbeam-channel = "0.5.12"
+serde_with = "3.8.1"
+crossbeam-channel = "0.5.13"
 r2d2 = "0.8.10"
 rayon = "1.10.0"
 num_cpus = "1.16.0"
@@ -37,4 +37,4 @@ num_cpus = "1.16.0"
 secp256k1-zkp = { git = "https://github.com/BlockstreamResearch/rust-secp256k1-zkp.git", rev = "60e631c24588a0c9e271badd61959294848c665d" }
 
 [build-dependencies]
-built = { version = "0.7.2", features = ["git2"] }
+built = { version = "0.7.3", features = ["git2"] }
