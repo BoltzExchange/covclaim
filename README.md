@@ -1,6 +1,15 @@
 # covclaim
 
-This is a daemon that connects to Elements via RPC and ZMQ and watches the chain for claimable covenants of Boltz reverse swaps and broadcasts them.
+This is a daemon that connects to Elements via RPC and ZMQ or an Esplora REST API and watches the chain for claimable
+covenants of Boltz swaps and broadcasts them.
+
+## Building
+
+The latest stable version of Rust is required to build covclaim.
+
+```bash
+cargo build --release
+```
 
 ## Configuration
 
