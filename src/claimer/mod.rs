@@ -8,7 +8,7 @@ use std::error::Error;
 use std::sync::Arc;
 use tokio::runtime::Builder;
 
-use crate::chain::types::ChainDataProvider;
+use crate::chain::types::ChainBackend;
 use crate::claimer::constructor::Constructor;
 use crate::db;
 use crate::db::helpers::get_pending_covenant_for_output;
@@ -21,14 +21,14 @@ const MAX_PARALLEL_REQUESTS: usize = 15;
 #[derive(Clone)]
 pub struct Claimer {
     db: db::Pool,
-    chain_client: Arc<Box<dyn ChainDataProvider + Send + Sync>>,
+    chain_client: Arc<Box<dyn ChainBackend + Send + Sync>>,
     constructor: Constructor,
 }
 
 impl Claimer {
     pub fn new(
         db: db::Pool,
-        chain_client: Arc<Box<dyn ChainDataProvider + Send + Sync>>,
+        chain_client: Arc<Box<dyn ChainBackend + Send + Sync>>,
         sweep_time: u64,
         sweep_interval: u64,
         address_param: &'static AddressParams,

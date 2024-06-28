@@ -10,7 +10,7 @@ use serde_json::json;
 use std::error::Error;
 use std::fs;
 
-use crate::chain::types::{ChainDataProvider, NetworkInfo, ZmqNotification};
+use crate::chain::types::{ChainBackend, NetworkInfo, ZmqNotification};
 use crate::chain::zmq::ZmqClient;
 
 enum StringOrU64 {
@@ -78,10 +78,6 @@ impl ChainClient {
         Ok(self)
     }
 
-    pub async fn get_network_info(self) -> Result<NetworkInfo, Box<dyn Error>> {
-        self.request::<NetworkInfo>("getnetworkinfo").await
-    }
-
     pub async fn get_zmq_notifications(self) -> Result<Vec<ZmqNotification>, Box<dyn Error>> {
         self.request::<Vec<ZmqNotification>>("getzmqnotifications")
             .await
@@ -128,23 +124,14 @@ impl ChainClient {
 
         Ok(res.result.unwrap())
     }
-
-    fn parse_hex<T: elements::encode::Decodable>(hex_str: String) -> Result<T, Box<dyn Error>> {
-        match elements::encode::deserialize(
-            match hex::decode(hex_str) {
-                Ok(res) => res,
-                Err(err) => return Err(Box::new(err)),
-            }
-            .as_ref(),
-        ) {
-            Ok(block) => Ok(block),
-            Err(e) => Err(Box::new(e)),
-        }
-    }
 }
 
 #[async_trait]
-impl ChainDataProvider for ChainClient {
+impl ChainBackend for ChainClient {
+    async fn get_network_info(&self) -> Result<NetworkInfo, Box<dyn Error>> {
+        self.clone().request::<NetworkInfo>("getnetworkinfo").await
+    }
+
     async fn get_block_count(&self) -> Result<u64, Box<dyn Error>> {
         self.clone().request::<u64>("getblockcount").await
     }
@@ -165,7 +152,7 @@ impl ChainDataProvider for ChainClient {
             .request_params::<String>("getblock", params)
             .await?;
 
-        Self::parse_hex(block_hex)
+        crate::chain::utils::parse_hex(block_hex)
     }
 
     async fn send_raw_transaction(&self, hex: String) -> Result<String, Box<dyn Error>> {
@@ -180,7 +167,7 @@ impl ChainDataProvider for ChainClient {
             .request_params::<String>("getrawtransaction", vec![hash])
             .await?;
 
-        Self::parse_hex(tx_hex)
+        crate::chain::utils::parse_hex(tx_hex)
     }
 
     fn get_tx_receiver(&self) -> Receiver<Transaction> {

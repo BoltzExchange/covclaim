@@ -5,7 +5,8 @@ use serde::Deserialize;
 use std::error::Error;
 
 #[async_trait]
-pub trait ChainDataProvider {
+pub trait ChainBackend {
+    async fn get_network_info(&self) -> Result<NetworkInfo, Box<dyn Error>>;
     async fn get_block_count(&self) -> Result<u64, Box<dyn Error>>;
     async fn get_block_hash(&self, height: u64) -> Result<String, Box<dyn Error>>;
     async fn get_block(&self, hash: String) -> Result<Block, Box<dyn Error>>;

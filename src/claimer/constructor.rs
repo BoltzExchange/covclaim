@@ -14,7 +14,7 @@ use std::ops::Sub;
 use std::sync::Arc;
 use tokio::time;
 
-use crate::chain::types::ChainDataProvider;
+use crate::chain::types::ChainBackend;
 use crate::claimer::tree::SwapTree;
 use crate::db;
 use crate::db::models::PendingCovenant;
@@ -22,7 +22,7 @@ use crate::db::models::PendingCovenant;
 #[derive(Clone)]
 pub struct Constructor {
     db: db::Pool,
-    chain_client: Arc<Box<dyn ChainDataProvider + Send + Sync>>,
+    chain_client: Arc<Box<dyn ChainBackend + Send + Sync>>,
     sweep_time: u64,
     sweep_interval: u64,
     address_params: &'static AddressParams,
@@ -31,7 +31,7 @@ pub struct Constructor {
 impl Constructor {
     pub fn new(
         db: db::Pool,
-        chain_client: Arc<Box<dyn ChainDataProvider + Send + Sync>>,
+        chain_client: Arc<Box<dyn ChainBackend + Send + Sync>>,
         sweep_time: u64,
         sweep_interval: u64,
         address_params: &'static AddressParams,
