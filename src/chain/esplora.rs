@@ -1,20 +1,24 @@
 use std::error::Error;
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use crossbeam_channel::{Receiver, Sender};
 use elements::{Block, Transaction};
-use log::{error, info, warn};
+use log::{error, info, trace, warn};
+use ratelimit::Ratelimiter;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
 use tokio::{task, time};
 
 use crate::chain::types::{ChainBackend, NetworkInfo};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct EsploraClient {
     endpoint: String,
     poll_interval: u64,
+
+    rate_limit: Option<Arc<Ratelimiter>>,
 
     // To keep the channel alive
     // This is just a stub; streaming transactions is not supported with Esplora
@@ -27,7 +31,11 @@ pub struct EsploraClient {
 }
 
 impl EsploraClient {
-    pub fn new(endpoint: String, poll_interval: u64) -> Self {
+    pub fn new(
+        endpoint: String,
+        poll_interval: u64,
+        max_reqs_per_second: u64,
+    ) -> Result<Self, Box<dyn Error>> {
         let trimmed_endpoint = match endpoint.strip_suffix("/") {
             Some(s) => s.to_string(),
             None => endpoint,
@@ -36,15 +44,32 @@ impl EsploraClient {
         let (tx_sender, tx_receiver) = crossbeam_channel::bounded::<Transaction>(1);
         let (block_sender, block_receiver) = crossbeam_channel::unbounded::<Block>();
 
-        EsploraClient {
+        let rate_limit: Option<Arc<Ratelimiter>>;
+
+        if max_reqs_per_second > 0 {
+            info!(
+                "Rate limiting requests at {} requests/second",
+                max_reqs_per_second
+            );
+            rate_limit = Some(Arc::new(
+                Ratelimiter::builder(max_reqs_per_second, Duration::from_secs(1))
+                    .max_tokens(max_reqs_per_second)
+                    .build()?,
+            ));
+        } else {
+            info!("Not rate limiting");
+            rate_limit = None;
+        }
+
+        Ok(EsploraClient {
             tx_sender,
+            rate_limit,
             tx_receiver,
             block_sender,
-            block_receiver,
-
             poll_interval,
+            block_receiver,
             endpoint: trimmed_endpoint,
-        }
+        })
     }
 
     pub fn connect(&self) {
@@ -91,6 +116,11 @@ impl EsploraClient {
                             continue;
                         }
                     };
+                    trace!(
+                        "Got block {} ({})",
+                        block.header.height,
+                        block.header.block_hash()
+                    );
                     match clone.block_sender.send(block) {
                         Ok(_) => {}
                         Err(err) => {
@@ -163,10 +193,28 @@ impl EsploraClient {
             req = req.body(body.unwrap())
         }
 
+        self.wait_rate_limit();
         let res = req.send().await?;
         match res.error_for_status() {
             Ok(res) => Ok(res),
             Err(err) => Err(err),
+        }
+    }
+
+    fn wait_rate_limit(&self) {
+        if self.rate_limit.is_none() {
+            return;
+        }
+
+        loop {
+            match self.rate_limit.clone().unwrap().try_wait() {
+                Ok(_) => {
+                    break;
+                }
+                Err(time) => {
+                    std::thread::sleep(time);
+                }
+            }
         }
     }
 }
@@ -228,18 +276,22 @@ mod esplora_client_test {
     #[test]
     fn test_trim_suffix() {
         assert_eq!(
-            EsploraClient::new(ENDPOINT.to_string(), 0).endpoint,
+            EsploraClient::new(ENDPOINT.to_string(), 0, 0)
+                .unwrap()
+                .endpoint,
             "https://blockstream.info/liquid/api"
         );
         assert_eq!(
-            EsploraClient::new("https://blockstream.info/liquid/api".to_string(), 0).endpoint,
+            EsploraClient::new("https://blockstream.info/liquid/api".to_string(), 0, 0)
+                .unwrap()
+                .endpoint,
             "https://blockstream.info/liquid/api"
         );
     }
 
     #[tokio::test]
     async fn test_new() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0);
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
 
         let info = client.get_network_info().await.unwrap();
         assert_eq!(info.subversion, "Esplora");
@@ -247,7 +299,7 @@ mod esplora_client_test {
 
     #[tokio::test]
     async fn test_get_block_count() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0);
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
 
         let count = client.get_block_count().await.unwrap();
         assert!(count > 2920403);
@@ -255,7 +307,7 @@ mod esplora_client_test {
 
     #[tokio::test]
     async fn test_get_block_hash() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0);
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
 
         let hash = client.get_block_hash(2920407).await.unwrap();
         assert_eq!(
@@ -266,7 +318,7 @@ mod esplora_client_test {
 
     #[tokio::test]
     async fn test_get_block() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0);
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
 
         let block_hash = "5510868513d80a64371cdedfef49327dc2cd452b32b93cbcd70ddeddcc7bef66";
         let block = client.get_block(block_hash.to_string()).await.unwrap();
@@ -276,7 +328,7 @@ mod esplora_client_test {
 
     #[tokio::test]
     async fn test_get_transaction() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0);
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
 
         let tx_hash = "dc2505641c10af5fe0ffd8f1bfc14e9608e73137009c69b6ee0d1fe8ce9784d6";
         let block = client.get_transaction(tx_hash.to_string()).await.unwrap();
@@ -285,7 +337,7 @@ mod esplora_client_test {
 
     #[tokio::test]
     async fn test_get_transaction_not_found() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0);
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
 
         let tx_hash = "not found";
         let block = client.get_transaction(tx_hash.to_string()).await;

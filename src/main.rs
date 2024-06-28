@@ -1,11 +1,11 @@
 use std::env;
 use std::sync::Arc;
 
+use crate::chain::esplora::EsploraClient;
+use crate::chain::types::ChainBackend;
 use dotenvy::dotenv;
 use elements::AddressParams;
 use log::{debug, error, info};
-
-use crate::chain::types::ChainBackend;
 
 mod api;
 mod chain;
@@ -110,15 +110,26 @@ async fn get_chain_backend() -> Arc<Box<dyn ChainBackend + Send + Sync>> {
             }
         }
         "esplora" => {
-            let client = chain::esplora::EsploraClient::new(
+            match EsploraClient::new(
                 env::var("ESPLORA_ENDPOINT").expect("ESPLORA_ENDPOINT must be set"),
                 env::var("ESPLORA_POLL_INTERVAL")
                     .expect("ESPLORA_POLL_INTERVAL must be set")
                     .parse::<u64>()
                     .expect("ESPLORA_POLL_INTERVAL invalid"),
-            );
-            client.connect();
-            Box::new(client)
+                env::var("ESPLORA_MAX_REQUESTS_PER_SECOND")
+                    .expect("ESPLORA_MAX_REQUESTS_PER_SECOND must be set")
+                    .parse::<u64>()
+                    .expect("ESPLORA_MAX_REQUESTS_PER_SECOND invalid"),
+            ) {
+                Ok(client) => {
+                    client.connect();
+                    Box::new(client)
+                }
+                Err(err) => {
+                    error!("Could not create Esplora client: {}", err);
+                    std::process::exit(1);
+                }
+            }
         }
         &_ => {
             error!("Unknown chain backend: {}", backend);
