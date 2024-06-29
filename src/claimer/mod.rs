@@ -5,6 +5,7 @@ use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use std::cmp;
 use std::error::Error;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::runtime::Builder;
 
@@ -131,7 +132,7 @@ impl Claimer {
         let block_range: Vec<u64> = (rescan_height..block_count + 1).collect();
 
         let (sender, receiver) = crossbeam_channel::bounded(block_range.len());
-        for task in IntoIterator::into_iter(block_range) {
+        for task in IntoIterator::into_iter(block_range.clone()) {
             sender.send(task).unwrap();
         }
 
@@ -145,6 +146,9 @@ impl Claimer {
             .enable_all()
             .build()
             .unwrap();
+
+        let processed_blocks = AtomicU64::new(0);
+        let blocks_to_rescan = block_range.len();
 
         (0..rescan_threads)
             .map(|_| receiver.clone())
@@ -184,6 +188,13 @@ impl Claimer {
                             self_clone.clone().handle_tx(tx).await;
                         }
                     });
+
+                    let processed = processed_blocks.fetch_add(1, Ordering::SeqCst) + 1;
+
+                    if processed % 10 == 0 {
+                        let processed_perc = processed as f64 / blocks_to_rescan as f64;
+                        info!("Rescan progress: {:.2}%", processed_perc * 100.0);
+                    }
                 }
             });
 
