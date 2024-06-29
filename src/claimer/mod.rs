@@ -216,22 +216,21 @@ impl Claimer {
         for vout in 0..tx.output.len() {
             let out = &tx.output[vout];
 
-            match get_pending_covenant_for_output(self.db.clone(), out.script_pubkey.as_bytes()) {
-                Some(covenant) => {
-                    info!(
-                        "Found covenant {} to claim in {}:{}",
-                        hex::encode(covenant.clone().output_script),
-                        tx.txid().to_string(),
-                        vout
-                    );
+            if let Some(covenant) =
+                get_pending_covenant_for_output(self.db.clone(), out.script_pubkey.as_bytes())
+            {
+                info!(
+                    "Found covenant {} to claim in {}:{}",
+                    hex::encode(covenant.clone().output_script),
+                    tx.txid().to_string(),
+                    vout
+                );
 
-                    self.clone()
-                        .constructor
-                        .schedule_broadcast(covenant, tx.clone())
-                        .await;
-                }
-                None => {}
-            };
+                self.clone()
+                    .constructor
+                    .schedule_broadcast(covenant, tx.clone())
+                    .await;
+            }
         }
     }
 }

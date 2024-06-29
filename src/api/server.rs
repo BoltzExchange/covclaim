@@ -28,5 +28,5 @@ pub async fn start_server(
         return Err(listener.err().unwrap());
     }
 
-    return Ok(axum::serve(listener.unwrap(), app.clone()).await);
+    Ok(axum::serve(listener.unwrap(), app.clone()).await)
 }

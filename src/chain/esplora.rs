@@ -39,7 +39,8 @@ impl EsploraClient {
         max_reqs_per_second: u64,
         boltz_endpoint: String,
     ) -> Result<Self, Box<dyn Error>> {
-        let trimmed_endpoint = match endpoint.strip_suffix("/") {
+        // TODO: also do in boltz
+        let trimmed_endpoint = match endpoint.strip_suffix('/') {
             Some(s) => s.to_string(),
             None => endpoint,
         };
@@ -47,32 +48,28 @@ impl EsploraClient {
         let (tx_sender, tx_receiver) = crossbeam_channel::bounded::<Transaction>(1);
         let (block_sender, block_receiver) = crossbeam_channel::unbounded::<Block>();
 
-        let rate_limit: Option<Arc<Ratelimiter>>;
-
-        if max_reqs_per_second > 0 {
+        let rate_limit = if max_reqs_per_second > 0 {
             info!(
                 "Rate limiting requests to {} requests/second",
                 max_reqs_per_second
             );
-            rate_limit = Some(Arc::new(
+            Some(Arc::new(
                 Ratelimiter::builder(max_reqs_per_second, Duration::from_secs(1))
                     .max_tokens(max_reqs_per_second)
                     .build()?,
-            ));
+            ))
         } else {
             info!("Not rate limiting");
-            rate_limit = None;
-        }
+            None
+        };
 
-        let boltz_client: Option<Client>;
-
-        if !boltz_endpoint.is_empty() {
+        let boltz_client = if !boltz_endpoint.is_empty() {
             info!("Broadcasting transactions with Boltz API");
-            boltz_client = Some(Client::new(boltz_endpoint));
+            Some(Client::new(boltz_endpoint))
         } else {
             info!("Broadcasting transactions with Esplora");
-            boltz_client = None;
-        }
+            None
+        };
 
         Ok(EsploraClient {
             tx_sender,
@@ -280,11 +277,11 @@ impl ChainBackend for EsploraClient {
     }
 
     fn get_tx_receiver(&self) -> Receiver<Transaction> {
-        return self.tx_receiver.clone();
+        self.tx_receiver.clone()
     }
 
     fn get_block_receiver(&self) -> Receiver<Block> {
-        return self.block_receiver.clone();
+        self.block_receiver.clone()
     }
 }
 

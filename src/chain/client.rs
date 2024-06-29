@@ -60,7 +60,7 @@ impl ChainClient {
         };
         trace!("Using Elements endpoint: {}", client.url);
 
-        return client;
+        client
     }
 
     pub async fn connect(mut self) -> Result<ChainClient, Box<dyn Error>> {
@@ -69,11 +69,7 @@ impl ChainClient {
         self.cookie = Some(format!("Basic {}", BASE64_STANDARD.encode(file)));
 
         let notifications = self.clone().get_zmq_notifications().await?;
-
-        match self.zmq_client.clone().connect(notifications).await {
-            Err(e) => return Err(e),
-            _ => {}
-        };
+        self.zmq_client.clone().connect(notifications).await?;
 
         Ok(self)
     }
@@ -143,9 +139,7 @@ impl ChainBackend for ChainClient {
     }
 
     async fn get_block(&self, hash: String) -> Result<Block, Box<dyn Error>> {
-        let mut params = Vec::<StringOrU64>::new();
-        params.push(StringOrU64::Str(hash));
-        params.push(StringOrU64::Num(0));
+        let params = vec![StringOrU64::Str(hash), StringOrU64::Num(0)];
 
         let block_hex = self
             .clone()

@@ -1,6 +1,7 @@
 use diesel::internal::derives::multiconnection::chrono;
 use diesel::prelude::*;
 
+#[derive(Copy, Clone)]
 pub enum PendingCovenantStatus {
     Pending = 0,
     TransactionFound = 1,

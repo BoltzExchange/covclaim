@@ -87,7 +87,6 @@ impl Constructor {
             Ok(_) => {}
             Err(err) => {
                 warn!("Could not schedule covenant claim: {}", err);
-                return;
             }
         };
     }
@@ -106,7 +105,7 @@ impl Constructor {
             }
         };
 
-        if covenants.len() == 0 {
+        if covenants.is_empty() {
             return;
         }
 
@@ -192,7 +191,7 @@ impl Constructor {
         let is_blinded = prevout.asset.is_confidential() && prevout.value.is_confidential();
         let tx_secrets = match is_blinded {
             true => match prevout.unblind(
-                &secp,
+                secp,
                 match SecretKey::from_slice(
                     match covenant.clone().blinding_key {
                         Some(res) => res,
@@ -232,7 +231,7 @@ impl Constructor {
         });
 
         if is_blinded {
-            let mut rng = OsRng::default();
+            let mut rng = OsRng;
 
             let op_return_script = Builder::new()
                 .push_opcode(opcodes::all::OP_RETURN)
@@ -241,13 +240,13 @@ impl Constructor {
             let out_abf = AssetBlindingFactor::new(&mut rng);
             let (blinded_asset, surjection_proof) = Asset::Explicit(utxo_asset).blind(
                 &mut rng,
-                &secp,
+                secp,
                 out_abf,
                 &[tx_secrets.unwrap()],
             )?;
 
             let final_vbf = ValueBlindingFactor::last(
-                &secp,
+                secp,
                 1,
                 out_abf,
                 &[(
@@ -269,9 +268,9 @@ impl Constructor {
                 ],
             );
             let (blinded_value, nonce, rangeproof) = Value::Explicit(1).blind(
-                &secp,
+                secp,
                 final_vbf,
-                SecretKey::new(&mut rng).public_key(&secp),
+                SecretKey::new(&mut rng).public_key(secp),
                 SecretKey::new(&mut rng),
                 &op_return_script.clone(),
                 &elements::RangeProofMessage {

@@ -139,7 +139,7 @@ async fn get_chain_backend() -> Arc<Box<dyn ChainBackend + Send + Sync>> {
         }
     };
 
-    return Arc::new(client);
+    Arc::new(client)
 }
 
 fn get_address_params() -> &'static AddressParams {

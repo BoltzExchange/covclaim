@@ -30,7 +30,7 @@ pub fn get_block_height(con: db::Pool) -> Option<u64> {
         .load(&mut con.get().unwrap())
     {
         Ok(res) => {
-            if res.len() == 0 {
+            if res.is_empty() {
                 return None;
             }
 
@@ -89,7 +89,7 @@ pub fn get_pending_covenant_for_output(con: db::Pool, script: &[u8]) -> Option<P
         .load(&mut con.get().unwrap())
     {
         Ok(res) => {
-            if res.len() == 0 {
+            if res.is_empty() {
                 return None;
             }
 

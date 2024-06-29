@@ -94,7 +94,7 @@ impl ZmqClient {
         handler: F,
     ) -> Result<(), ZmqError>
     where
-        F: Fn(ZmqMessage) -> () + Send + 'static,
+        F: Fn(ZmqMessage) + Send + 'static,
     {
         debug!(
             "Connecting to {} ZMQ at {}",
