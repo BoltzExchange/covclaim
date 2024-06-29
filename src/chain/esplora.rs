@@ -247,7 +247,7 @@ impl ChainBackend for EsploraClient {
     }
 
     async fn send_raw_transaction(&self, hex: String) -> Result<String, Box<dyn Error>> {
-        self.request_string(true, "/tx", Some(hex)).await
+        self.request_string(true, "tx", Some(hex)).await
     }
 
     async fn get_transaction(&self, hash: String) -> Result<Transaction, Box<dyn Error>> {

@@ -7,7 +7,7 @@ use axum::response::IntoResponse;
 use axum::{Extension, Json};
 use elements::hashes::Hash;
 use elements::secp256k1_zkp::{MusigKeyAggCache, PublicKey, SecretKey};
-use elements::{hashes, Address};
+use elements::{hashes, Address, AddressParams};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -17,10 +17,10 @@ use crate::claimer::tree::SwapTree;
 use crate::db::helpers::insert_covenant;
 use crate::db::models::{PendingCovenant, PendingCovenantStatus};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct EmptyResponse {}
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct ErrorResponse {
     pub error: String,
 }
@@ -68,13 +68,9 @@ pub async fn post_covenant_claim(
     Extension(state): Extension<Arc<RouterState>>,
     Json(body): Json<CovenantClaimRequest>,
 ) -> impl IntoResponse {
-    let address_script = match Address::from_str(body.address.as_str()) {
-        Ok(res) => res,
-        Err(err) => {
-            return CovenantClaimResponse::Error(ErrorResponse {
-                error: format!("could not parse address: {}", err.to_string()),
-            })
-        }
+    let address = match parse_address(state.address_params, body.address) {
+        Ok(addr) => addr,
+        Err(err) => return CovenantClaimResponse::Error(err),
     };
 
     let blinding_key: Result<Option<Vec<u8>>, Box<dyn Error>> = match body.blinding_key {
@@ -144,9 +140,7 @@ pub async fn post_covenant_claim(
             swap_tree: json!(body.tree).to_string(),
             internal_key: internal_key.clone(),
             status: PendingCovenantStatus::Pending.to_int(),
-            address: elements::pset::serialize::Serialize::serialize(
-                &address_script.script_pubkey(),
-            ),
+            address: elements::pset::serialize::Serialize::serialize(&address.script_pubkey()),
             output_script: elements::pset::serialize::Serialize::serialize(
                 &body
                     .tree
@@ -165,5 +159,72 @@ pub async fn post_covenant_claim(
         Err(e) => CovenantClaimResponse::Error(ErrorResponse {
             error: e.to_string(),
         }),
+    }
+}
+
+fn parse_address(
+    params: &'static AddressParams,
+    address: String,
+) -> Result<Address, ErrorResponse> {
+    let address = match Address::from_str(address.as_str()) {
+        Ok(res) => res,
+        Err(err) => {
+            return Err(ErrorResponse {
+                error: format!("could not parse address: {}", err.to_string()),
+            });
+        }
+    };
+    if address.params != params {
+        return Err(ErrorResponse {
+            error: "address has invalid network".to_string(),
+        });
+    }
+
+    Ok(address)
+}
+
+#[cfg(test)]
+mod parse_address_test {
+    use crate::api::routes::parse_address;
+
+    macro_rules! address_tests {
+        ($($name:ident: $value:expr,)*) => {
+            $(
+                #[test]
+                fn $name() {
+                    let (params, address) = $value;
+                    let res = parse_address(params, address);
+                    assert!(res.is_ok());
+                }
+            )*
+        }
+    }
+
+    address_tests! {
+        address_regtest_blech32: (&elements::AddressParams::ELEMENTS, "el1qq2kqp5kej5gjfh24scawfxpl3uju5fr9tqv6f78sjauxlakgq8musy544qwhad34768q5t0ppmzr0z9wyn70cx5fkee9lzv4j".to_string()),
+        address_regtest_bech32: (&elements::AddressParams::ELEMENTS, "ert1qpf0c8tqm70908xalp9jh4275etnq5lgnet663j".to_string()),
+        address_regtest_p2sh_segwit: (&elements::AddressParams::ELEMENTS, "AzpqTBkNPY3XMEzeJTGP6zHjhBU811mAr9QLXJXFBsEaHNztc3zU1f7q2Hb6gsAVaRBKszTqTsgRDooT".to_string()),
+        address_regtest_p2sh_segwit_unblinded: (&elements::AddressParams::ELEMENTS, "XCwwMo8ZF6aFssQLkaxpKQ3bpVNkQV8DFZ".to_string()),
+        address_regtest_p2pkh: (&elements::AddressParams::ELEMENTS, "CTEuCmh6NCYTpevF6xzneb9M6TvkgdWrKf1r5RxToWjks1s4J94jaFvBnmQgEFZfgLMdZZjUNmJx8v5o".to_string()),
+        address_regtest_p2pkh_unblinded: (&elements::AddressParams::ELEMENTS, "2dosihHMFweo6wWaHkXeZ5mMNmp8U4Nkt9B".to_string()),
+        address_regtest_blech32_testnet: (&elements::AddressParams::LIQUID_TESTNET, "tlq1qqtfnwp6xac7lxa7nc7s972qm7yjptk46ncwhpymy5303a5pff7peeq5a3s5j4xfgydd3hdns4addsepu0psrk3ewf8ldskw47".to_string()),
+        address_regtest_blech32_mainnet: (&elements::AddressParams::LIQUID, "lq1qq0qeqmfff6rcp38qd5muf22fsej5k0e0aaq2y4mv0j4h4sql5ejyxgd4ycpcg0x0f6snpeam4r7nxeyrattgudvyckw36lvkw".to_string()),
+    }
+
+    #[test]
+    fn test_parse_address_invalid() {
+        let res = parse_address(&elements::AddressParams::ELEMENTS, "not valid".to_string());
+        assert!(res.clone().err().is_some());
+        assert_eq!(
+            res.err().unwrap().error,
+            "could not parse address: base58 error: invalid base58 character 0x20"
+        );
+    }
+
+    #[test]
+    fn test_parse_address_invalid_network() {
+        let res = parse_address(&elements::AddressParams::LIQUID, "el1qq2kqp5kej5gjfh24scawfxpl3uju5fr9tqv6f78sjauxlakgq8musy544qwhad34768q5t0ppmzr0z9wyn70cx5fkee9lzv4j".to_string());
+        assert!(res.clone().err().is_some());
+        assert_eq!(res.err().unwrap().error, "address has invalid network");
     }
 }
