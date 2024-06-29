@@ -13,7 +13,9 @@ pub struct Client {
 
 impl Client {
     pub fn new(endpoint: String) -> Self {
-        Client { endpoint }
+        Client {
+            endpoint: crate::utils::string::trim_suffix(endpoint, '/'),
+        }
     }
 
     pub async fn send_raw_transaction(&self, hex: String) -> Result<String, Box<dyn Error>> {
@@ -64,6 +66,12 @@ mod client_test {
     use crate::boltz::api::Client;
 
     const ENDPOINT: &str = "https://api.testnet.boltz.exchange/v2";
+
+    #[test]
+    fn test_trim_suffix() {
+        assert_eq!(Client::new(ENDPOINT.to_string() + "/").endpoint, ENDPOINT);
+        assert_eq!(Client::new(ENDPOINT.to_string()).endpoint, ENDPOINT);
+    }
 
     #[tokio::test]
     async fn test_send_raw_transaction_error_handling() {

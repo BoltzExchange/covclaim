@@ -102,13 +102,10 @@ impl SwapTree {
     ) -> Option<(TxOut, u32)> {
         let script_pubkey = self.address(internal_key, params).script_pubkey();
 
-        let mut vout: u32 = 0;
-        for out in lockup_tx.output {
+        for (vout, out) in (0_u32..).zip(lockup_tx.output.into_iter()) {
             if out.script_pubkey.eq(&script_pubkey) {
                 return Some((out, vout));
             }
-
-            vout += 1;
         }
 
         None

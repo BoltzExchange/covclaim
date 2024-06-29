@@ -88,7 +88,7 @@ pub async fn post_covenant_claim(
         return CovenantClaimResponse::Error(ErrorResponse {
             error: format!(
                 "could not parse blinding key: {}",
-                blinding_key.err().unwrap().to_string()
+                blinding_key.err().unwrap()
             ),
         });
     }
@@ -97,7 +97,7 @@ pub async fn post_covenant_claim(
         Ok(res) => res,
         Err(err) => {
             return CovenantClaimResponse::Error(ErrorResponse {
-                error: format!("could not parse swap tree: {}", err.to_string()),
+                error: format!("could not parse swap tree: {}", err),
             })
         }
     };
@@ -109,7 +109,7 @@ pub async fn post_covenant_claim(
                 Ok(res) => res,
                 Err(err) => {
                     return CovenantClaimResponse::Error(ErrorResponse {
-                        error: format!("could not parse refundPublicKey: {}", err.to_string()),
+                        error: format!("could not parse refundPublicKey: {}", err),
                     })
                 }
             },
@@ -117,7 +117,7 @@ pub async fn post_covenant_claim(
                 Ok(res) => res,
                 Err(err) => {
                     return CovenantClaimResponse::Error(ErrorResponse {
-                        error: format!("could not parse claimPublicKey: {}", err.to_string()),
+                        error: format!("could not parse claimPublicKey: {}", err),
                     })
                 }
             },
@@ -126,7 +126,7 @@ pub async fn post_covenant_claim(
     let internal_key = Vec::from(aggregate.agg_pk().serialize());
 
     let preimage_hash: hashes::hash160::Hash = Hash::hash(body.preimage.clone().as_ref());
-    if Vec::from(preimage_hash.as_byte_array()) != covenant_details.preimage_hash {
+    if covenant_details.preimage_hash != *preimage_hash.as_byte_array() {
         return CovenantClaimResponse::Error(ErrorResponse {
             error: "invalid preimage".to_string(),
         });
@@ -145,7 +145,7 @@ pub async fn post_covenant_claim(
                 &body
                     .tree
                     .clone()
-                    .address(internal_key, &state.address_params)
+                    .address(internal_key, state.address_params)
                     .script_pubkey(),
             ),
             tx_id: None,
@@ -170,7 +170,7 @@ fn parse_address(
         Ok(res) => res,
         Err(err) => {
             return Err(ErrorResponse {
-                error: format!("could not parse address: {}", err.to_string()),
+                error: format!("could not parse address: {}", err),
             });
         }
     };

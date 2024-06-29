@@ -12,6 +12,7 @@ mod boltz;
 mod chain;
 mod claimer;
 mod db;
+mod utils;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -139,7 +140,7 @@ async fn get_chain_backend() -> Arc<Box<dyn ChainBackend + Send + Sync>> {
         }
     };
 
-    return Arc::new(client);
+    Arc::new(client)
 }
 
 fn get_address_params() -> &'static AddressParams {
