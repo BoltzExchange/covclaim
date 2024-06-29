@@ -39,12 +39,6 @@ impl EsploraClient {
         max_reqs_per_second: u64,
         boltz_endpoint: String,
     ) -> Result<Self, Box<dyn Error>> {
-        // TODO: also do in boltz
-        let trimmed_endpoint = match endpoint.strip_suffix('/') {
-            Some(s) => s.to_string(),
-            None => endpoint,
-        };
-
         let (tx_sender, tx_receiver) = crossbeam_channel::bounded::<Transaction>(1);
         let (block_sender, block_receiver) = crossbeam_channel::unbounded::<Block>();
 
@@ -79,7 +73,7 @@ impl EsploraClient {
             boltz_client,
             poll_interval,
             block_receiver,
-            endpoint: trimmed_endpoint,
+            endpoint: crate::utils::string::trim_suffix(endpoint, '/'),
         })
     }
 
