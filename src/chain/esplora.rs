@@ -2,6 +2,8 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::boltz::api::Client;
+use crate::chain::types::{ChainBackend, NetworkInfo};
 use async_trait::async_trait;
 use crossbeam_channel::{Receiver, Sender};
 use elements::{Block, Transaction};
@@ -10,8 +12,6 @@ use ratelimit::Ratelimiter;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
 use tokio::{task, time};
-
-use crate::chain::types::{ChainBackend, NetworkInfo};
 
 #[derive(Clone)]
 pub struct EsploraClient {
@@ -28,6 +28,8 @@ pub struct EsploraClient {
 
     block_sender: Sender<Block>,
     block_receiver: Receiver<Block>,
+
+    boltz_client: Option<Client>,
 }
 
 impl EsploraClient {
@@ -35,6 +37,7 @@ impl EsploraClient {
         endpoint: String,
         poll_interval: u64,
         max_reqs_per_second: u64,
+        boltz_endpoint: String,
     ) -> Result<Self, Box<dyn Error>> {
         let trimmed_endpoint = match endpoint.strip_suffix("/") {
             Some(s) => s.to_string(),
@@ -48,7 +51,7 @@ impl EsploraClient {
 
         if max_reqs_per_second > 0 {
             info!(
-                "Rate limiting requests at {} requests/second",
+                "Rate limiting requests to {} requests/second",
                 max_reqs_per_second
             );
             rate_limit = Some(Arc::new(
@@ -61,11 +64,22 @@ impl EsploraClient {
             rate_limit = None;
         }
 
+        let boltz_client: Option<Client>;
+
+        if !boltz_endpoint.is_empty() {
+            info!("Broadcasting transactions with Boltz API");
+            boltz_client = Some(Client::new(boltz_endpoint));
+        } else {
+            info!("Broadcasting transactions with Esplora");
+            boltz_client = None;
+        }
+
         Ok(EsploraClient {
             tx_sender,
             rate_limit,
             tx_receiver,
             block_sender,
+            boltz_client,
             poll_interval,
             block_receiver,
             endpoint: trimmed_endpoint,
@@ -247,7 +261,15 @@ impl ChainBackend for EsploraClient {
     }
 
     async fn send_raw_transaction(&self, hex: String) -> Result<String, Box<dyn Error>> {
-        self.request_string(true, "tx", Some(hex)).await
+        if self.boltz_client.is_some() {
+            self.boltz_client
+                .clone()
+                .unwrap()
+                .send_raw_transaction(hex)
+                .await
+        } else {
+            self.request_string(true, "tx", Some(hex)).await
+        }
     }
 
     async fn get_transaction(&self, hash: String) -> Result<Transaction, Box<dyn Error>> {
@@ -276,22 +298,27 @@ mod esplora_client_test {
     #[test]
     fn test_trim_suffix() {
         assert_eq!(
-            EsploraClient::new(ENDPOINT.to_string(), 0, 0)
+            EsploraClient::new(ENDPOINT.to_string(), 0, 0, "".to_string())
                 .unwrap()
                 .endpoint,
             "https://blockstream.info/liquid/api"
         );
         assert_eq!(
-            EsploraClient::new("https://blockstream.info/liquid/api".to_string(), 0, 0)
-                .unwrap()
-                .endpoint,
+            EsploraClient::new(
+                "https://blockstream.info/liquid/api".to_string(),
+                0,
+                0,
+                "".to_string(),
+            )
+            .unwrap()
+            .endpoint,
             "https://blockstream.info/liquid/api"
         );
     }
 
     #[tokio::test]
     async fn test_new() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0, "".to_string()).unwrap();
 
         let info = client.get_network_info().await.unwrap();
         assert_eq!(info.subversion, "Esplora");
@@ -299,7 +326,7 @@ mod esplora_client_test {
 
     #[tokio::test]
     async fn test_get_block_count() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0, "".to_string()).unwrap();
 
         let count = client.get_block_count().await.unwrap();
         assert!(count > 2920403);
@@ -307,7 +334,7 @@ mod esplora_client_test {
 
     #[tokio::test]
     async fn test_get_block_hash() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0, "".to_string()).unwrap();
 
         let hash = client.get_block_hash(2920407).await.unwrap();
         assert_eq!(
@@ -318,7 +345,7 @@ mod esplora_client_test {
 
     #[tokio::test]
     async fn test_get_block() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0, "".to_string()).unwrap();
 
         let block_hash = "5510868513d80a64371cdedfef49327dc2cd452b32b93cbcd70ddeddcc7bef66";
         let block = client.get_block(block_hash.to_string()).await.unwrap();
@@ -328,7 +355,7 @@ mod esplora_client_test {
 
     #[tokio::test]
     async fn test_get_transaction() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0, "".to_string()).unwrap();
 
         let tx_hash = "dc2505641c10af5fe0ffd8f1bfc14e9608e73137009c69b6ee0d1fe8ce9784d6";
         let block = client.get_transaction(tx_hash.to_string()).await.unwrap();
@@ -337,7 +364,7 @@ mod esplora_client_test {
 
     #[tokio::test]
     async fn test_get_transaction_not_found() {
-        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0).unwrap();
+        let client = EsploraClient::new(ENDPOINT.to_string(), 0, 0, "".to_string()).unwrap();
 
         let tx_hash = "not found";
         let block = client.get_transaction(tx_hash.to_string()).await;

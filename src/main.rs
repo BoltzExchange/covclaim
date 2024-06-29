@@ -8,6 +8,7 @@ use elements::AddressParams;
 use log::{debug, error, info};
 
 mod api;
+mod boltz;
 mod chain;
 mod claimer;
 mod db;
@@ -120,6 +121,7 @@ async fn get_chain_backend() -> Arc<Box<dyn ChainBackend + Send + Sync>> {
                     .expect("ESPLORA_MAX_REQUESTS_PER_SECOND must be set")
                     .parse::<u64>()
                     .expect("ESPLORA_MAX_REQUESTS_PER_SECOND invalid"),
+                env::var("BOLTZ_ENDPOINT").expect("BOLTZ_ENDPOINT must be set"),
             ) {
                 Ok(client) => {
                     client.connect();
