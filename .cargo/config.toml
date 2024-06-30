@@ -1,2 +1,0 @@
-[env]
-RUST_LOG = "trace,hyper=info,tracing=info,reqwest=info"
