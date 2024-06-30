@@ -24,12 +24,20 @@ async fn main() {
     env_logger::init();
 
     info!(
-        "Starting covclaim v{}-{}",
+        "Starting {} v{}-{}{}",
+        built_info::PKG_NAME,
         built_info::PKG_VERSION,
-        built_info::GIT_VERSION.unwrap_or("")
+        built_info::GIT_VERSION.unwrap_or(""),
+        if built_info::GIT_DIRTY.unwrap_or(false) {
+            "-dirty"
+        } else {
+            ""
+        }
     );
+
     debug!(
-        "Compiled with {} for {}",
+        "Compiled {} with {} for {}",
+        built_info::PROFILE,
         built_info::RUSTC_VERSION,
         built_info::TARGET
     );
@@ -101,8 +109,8 @@ async fn get_chain_backend() -> Arc<Box<dyn ChainBackend + Send + Sync>> {
                     .expect("ELEMENTS_PORT invalid"),
                 env::var("ELEMENTS_COOKIE").expect("ELEMENTS_COOKIE must be set"),
             )
-            .connect()
-            .await
+                .connect()
+                .await
             {
                 Ok(client) => Box::new(client),
                 Err(err) => {

@@ -9,18 +9,40 @@ use crate::db::schema::pending_covenants;
 
 const BLOCK_HEIGHT_NAME: &str = "block_height";
 
-pub fn upsert_block_height(con: db::Pool, height: u64) -> QueryResult<usize> {
+pub fn upsert_block_height(con: db::Pool, height: u64) -> Result<(), diesel::result::Error> {
     let values = Parameter {
         name: BLOCK_HEIGHT_NAME.to_string(),
         value: height.to_string(),
     };
 
-    insert_into(parameters::dsl::parameters)
-        .values(&values)
-        .on_conflict(parameters::dsl::name)
-        .do_update()
-        .set(parameters::dsl::value.eq(height.to_string()))
-        .execute(&mut con.get().unwrap())
+    match parameters::dsl::parameters
+        .select(Parameter::as_select())
+        .filter(parameters::dsl::name.eq(BLOCK_HEIGHT_NAME.to_string()))
+        .limit(1)
+        .load(&mut con.get().unwrap())
+    {
+        Ok(res) => {
+            if res.is_empty() {
+                match insert_into(parameters::dsl::parameters)
+                    .values(&values)
+                    .execute(&mut con.get().unwrap())
+                {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(err),
+                }
+            } else {
+                match update(parameters::dsl::parameters)
+                    .filter(parameters::dsl::name.eq(BLOCK_HEIGHT_NAME.to_string()))
+                    .set((parameters::dsl::value.eq(height.to_string()),))
+                    .execute(&mut con.get().unwrap())
+                {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(err),
+                }
+            }
+        }
+        Err(err) => Err(err),
+    }
 }
 
 pub fn get_block_height(con: db::Pool) -> Option<u64> {
