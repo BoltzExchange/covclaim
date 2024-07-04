@@ -6,4 +6,6 @@ COPY ./ ./
 
 RUN cargo build --release
 
+EXPOSE 1234
+
 CMD ["./target/release/covclaim"]
