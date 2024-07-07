@@ -20,7 +20,10 @@ pub mod built_info {
 
 #[tokio::main]
 async fn main() {
-    dotenv().expect("could not read env file");
+    match dotenv() {
+        Ok(_) => {}
+        Err(err) => println!("Could not read .env file: {}", err),
+    };
     env_logger::init();
 
     info!(
@@ -109,8 +112,8 @@ async fn get_chain_backend() -> Arc<Box<dyn ChainBackend + Send + Sync>> {
                     .expect("ELEMENTS_PORT invalid"),
                 env::var("ELEMENTS_COOKIE").expect("ELEMENTS_COOKIE must be set"),
             )
-                .connect()
-                .await
+            .connect()
+            .await
             {
                 Ok(client) => Box::new(client),
                 Err(err) => {
