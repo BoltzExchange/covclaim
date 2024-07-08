@@ -1,4 +1,4 @@
-FROM rust:1.79 as builder
+FROM rust:1.79 AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ FROM debian:bookworm-slim
 
 RUN apt-get update && \
   apt-get upgrade && \
-  apt-get install -y libsqlite3-0 libpq5 && \
+  apt-get install -y libsqlite3-0 libpq5 ca-certificates && \
   apt-get clean all && \
   rm -rf /var/lib/apt/lists/*
 
