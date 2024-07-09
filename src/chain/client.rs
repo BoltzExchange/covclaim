@@ -10,7 +10,7 @@ use serde_json::json;
 use std::error::Error;
 use std::fs;
 
-use crate::chain::types::{ChainBackend, NetworkInfo, ZmqNotification};
+use crate::chain::types::{ChainBackend, NetworkInfo, TransactionBroadcastError, ZmqNotification};
 use crate::chain::zmq::ZmqClient;
 
 enum StringOrU64 {
@@ -31,8 +31,8 @@ impl Serialize for StringOrU64 {
 }
 
 #[derive(Deserialize)]
-struct RpcError {
-    message: String,
+pub struct RpcError {
+    pub message: String,
 }
 
 #[derive(Deserialize)]
@@ -149,10 +149,15 @@ impl ChainBackend for ChainClient {
         crate::chain::utils::parse_hex(block_hex)
     }
 
-    async fn send_raw_transaction(&self, hex: String) -> Result<String, Box<dyn Error>> {
-        self.clone()
+    async fn send_raw_transaction(&self, hex: String) -> Result<String, TransactionBroadcastError> {
+        match self
+            .clone()
             .request_params::<String>("sendrawtransaction", vec![hex])
             .await
+        {
+            Ok(res) => Ok(res),
+            Err(err) => Err(err.into()),
+        }
     }
 
     async fn get_transaction(&self, hash: String) -> Result<Transaction, Box<dyn Error>> {

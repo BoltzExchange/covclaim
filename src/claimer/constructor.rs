@@ -1,3 +1,7 @@
+use std::error::Error;
+use std::ops::Sub;
+use std::sync::Arc;
+
 use diesel::internal::derives::multiconnection::chrono::{TimeDelta, Utc};
 use elements::bitcoin::Witness;
 use elements::confidential::{Asset, AssetBlindingFactor, Nonce, Value, ValueBlindingFactor};
@@ -9,9 +13,6 @@ use elements::{
     TxOut, TxOutWitness,
 };
 use log::{debug, error, info, trace, warn};
-use std::error::Error;
-use std::ops::Sub;
-use std::sync::Arc;
 use tokio::time;
 
 use crate::chain::types::ChainBackend;
@@ -321,22 +322,23 @@ impl Constructor {
         let tx_hex = hex::encode(elements::pset::serialize::Serialize::serialize(&tx));
         trace!("Broadcasting transaction {}", tx_hex);
 
-        match self.chain_client.send_raw_transaction(tx_hex).await {
+        let has_been_included = match self.chain_client.send_raw_transaction(tx_hex).await {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                if err.is_already_included() {
+                    Ok(())
+                } else {
+                    Err(err)
+                }
+            }
+        };
+
+        match has_been_included {
             Ok(_) => match db::helpers::set_covenant_claimed(self.db, covenant.output_script) {
                 Ok(_) => Ok(tx),
                 Err(err) => Err(Box::new(err)),
             },
-            Err(err) => {
-                let err_str = err.to_string();
-
-                if err_str.starts_with("insufficient fee, rejecting replacement")
-                    || err_str.starts_with("bad-txns-inputs-missingorspent")
-                {
-                    Ok(tx)
-                } else {
-                    Err(err.to_string().into())
-                }
-            }
+            Err(err) => Err(err.to_string().into()),
         }
     }
 
