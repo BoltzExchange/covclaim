@@ -137,13 +137,21 @@ impl Constructor {
 
     async fn broadcast_covenant(self, cov: PendingCovenant, tx: Transaction) {
         match self.clone().broadcast_tx(cov.clone(), tx).await {
-            Ok(tx) => {
-                info!(
-                    "Broadcast claim for {}: {}",
-                    hex::encode(cov.clone().output_script),
-                    tx.txid().to_string(),
-                )
-            }
+            Ok(tx) => match tx {
+                Some(tx) => {
+                    info!(
+                        "Broadcast claim for {}: {}",
+                        hex::encode(cov.clone().output_script),
+                        tx.txid().to_string(),
+                    )
+                }
+                None => {
+                    info!(
+                        "Output of {} already spent",
+                        hex::encode(cov.clone().output_script),
+                    )
+                }
+            },
             Err(err) => {
                 error!(
                     "Could not broadcast claim for {}: {}",
@@ -158,7 +166,7 @@ impl Constructor {
         self,
         covenant: PendingCovenant,
         lockup_tx: Transaction,
-    ) -> Result<Transaction, Box<dyn Error + Send + Sync>> {
+    ) -> Result<Option<Transaction>, Box<dyn Error + Send + Sync>> {
         let tree = serde_json::from_str::<SwapTree>(covenant.swap_tree.as_str()).unwrap();
         let (prevout, vout) = match tree.clone().find_output(
             lockup_tx.clone(),
@@ -323,10 +331,10 @@ impl Constructor {
         trace!("Broadcasting transaction {}", tx_hex);
 
         let has_been_included = match self.chain_client.send_raw_transaction(tx_hex).await {
-            Ok(_) => Ok(()),
+            Ok(_) => Ok(false),
             Err(err) => {
                 if err.is_already_included() {
-                    Ok(())
+                    Ok(true)
                 } else {
                     Err(err)
                 }
@@ -334,10 +342,12 @@ impl Constructor {
         };
 
         match has_been_included {
-            Ok(_) => match db::helpers::set_covenant_claimed(self.db, covenant.output_script) {
-                Ok(_) => Ok(tx),
-                Err(err) => Err(Box::new(err)),
-            },
+            Ok(already_included) => {
+                match db::helpers::set_covenant_claimed(self.db, covenant.output_script) {
+                    Ok(_) => Ok(if already_included { None } else { Some(tx) }),
+                    Err(err) => Err(Box::new(err)),
+                }
+            }
             Err(err) => Err(err.to_string().into()),
         }
     }
