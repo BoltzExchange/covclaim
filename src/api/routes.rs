@@ -43,6 +43,7 @@ pub struct CovenantClaimRequest {
 
     pub address: String,
     pub tree: SwapTree,
+    pub swap_id: String,
 }
 
 #[derive(Serialize)]
@@ -150,6 +151,7 @@ pub async fn post_covenant_claim(
             ),
             tx_id: None,
             tx_time: None,
+            swap_id: body.swap_id,
         },
     ) {
         Ok(_) => {

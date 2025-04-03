@@ -19,6 +19,7 @@ diesel::table! {
         tx_id -> Nullable<Binary>,
         tx_time -> Nullable<Timestamp>,
         created_at -> Timestamp,
+        swap_id -> Text,
     }
 }
 

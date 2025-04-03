@@ -33,4 +33,5 @@ pub struct PendingCovenant {
     pub blinding_key: Option<Vec<u8>>,
     pub tx_id: Option<Vec<u8>>,
     pub tx_time: Option<chrono::NaiveDateTime>,
+    pub swap_id: String,
 }

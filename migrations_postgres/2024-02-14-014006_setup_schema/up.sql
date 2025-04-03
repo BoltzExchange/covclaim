@@ -13,7 +13,8 @@ CREATE TABLE pending_covenants (
     blinding_key BYTEA,
     tx_id BYTEA,
     tx_time TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    swap_id VARCHAR NOT NULL
 );
 
 CREATE INDEX pending_covenants_status_idx ON pending_covenants (status);
