@@ -127,10 +127,12 @@ async fn get_chain_backend() -> Arc<Box<dyn ChainBackend + Send + Sync>> {
             match chain::client::ChainClient::new(
                 env::var("ELEMENTS_HOST").expect("ELEMENTS_HOST must be set"),
                 env::var("ELEMENTS_PORT")
-                    .expect("ELEMENTS_PORT must be est")
+                    .expect("ELEMENTS_PORT must be set")
                     .parse::<u32>()
                     .expect("ELEMENTS_PORT invalid"),
-                env::var("ELEMENTS_COOKIE").expect("ELEMENTS_COOKIE must be set"),
+                None,
+                Some(env::var("ELEMENTS_USER").expect("ELEMENTS_USER must be set")),
+                Some(env::var("ELEMENTS_PASSWORD").expect("ELEMENTS_PASSWORD must be set")),
             )
             .connect()
             .await

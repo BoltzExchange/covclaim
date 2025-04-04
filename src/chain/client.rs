@@ -44,16 +44,19 @@ struct RpcResponse<T> {
 #[derive(Clone)]
 pub struct ChainClient {
     url: String,
-    cookie_file_path: String,
+    cookie_file_path: Option<String>,
+    rpc_user: Option<String>,
+    rpc_password: Option<String>,
     zmq_client: ZmqClient,
-
     cookie: Option<String>,
 }
 
 impl ChainClient {
-    pub fn new(host: String, port: u32, cookie_file_path: String) -> ChainClient {
+    pub fn new(host: String, port: u32, cookie_file_path: Option<String>, rpc_user: Option<String>, rpc_password: Option<String>) -> ChainClient {
         let client = ChainClient {
             cookie_file_path,
+            rpc_user,
+            rpc_password,
             cookie: None,
             zmq_client: ZmqClient::new(),
             url: format!("http://{}:{}", host, port),
@@ -64,9 +67,15 @@ impl ChainClient {
     }
 
     pub async fn connect(mut self) -> Result<ChainClient, Box<dyn Error>> {
-        let file = fs::read(self.cookie_file_path.clone())?;
-        debug!("Read Elements cookie file: {}", self.cookie_file_path);
-        self.cookie = Some(format!("Basic {}", BASE64_STANDARD.encode(file)));
+        if let Some(cookie_path) = self.cookie_file_path.clone() {
+            let file = fs::read(cookie_path.clone())?;
+            debug!("Read Elements cookie file: {}", cookie_path);
+            self.cookie = Some(format!("Basic {}", BASE64_STANDARD.encode(file)));
+        } else if let (Some(user), Some(pass)) = (self.rpc_user.clone(), self.rpc_password.clone()) {
+            self.cookie = Some(format!("Basic {}", BASE64_STANDARD.encode(format!("{}:{}", user, pass))));
+        } else {
+            return Err("no authentication method provided".into());
+        }
 
         let notifications = self.clone().get_zmq_notifications().await?;
         self.zmq_client.clone().connect(notifications).await?;

@@ -9,7 +9,7 @@ RUN cargo build --release
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
-  apt-get upgrade && \
+  apt-get upgrade -y && \
   apt-get install -y libsqlite3-0 libpq5 ca-certificates && \
   apt-get clean all && \
   rm -rf /var/lib/apt/lists/*
