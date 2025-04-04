@@ -19,6 +19,7 @@ use crate::chain::types::ChainBackend;
 use crate::claimer::tree::SwapTree;
 use crate::db;
 use crate::db::models::PendingCovenant;
+use crate::kafka::KafkaClient;
 
 #[derive(Clone)]
 pub struct Constructor {
@@ -27,6 +28,7 @@ pub struct Constructor {
     sweep_time: u64,
     sweep_interval: u64,
     address_params: &'static AddressParams,
+    kafka_client: Option<Arc<KafkaClient>>,
 }
 
 impl Constructor {
@@ -36,6 +38,7 @@ impl Constructor {
         sweep_time: u64,
         sweep_interval: u64,
         address_params: &'static AddressParams,
+        kafka_client: Option<KafkaClient>,
     ) -> Constructor {
         Constructor {
             db,
@@ -43,6 +46,7 @@ impl Constructor {
             chain_client,
             address_params,
             sweep_interval,
+            kafka_client: kafka_client.map(Arc::new),
         }
     }
 
@@ -143,13 +147,22 @@ impl Constructor {
                         "Broadcast claim for {}: {}",
                         hex::encode(cov.clone().output_script),
                         tx.txid().to_string(),
-                    )
+                    );
+                    if let Some(kafka_client) = self.kafka_client {
+                        if let Err(e) = kafka_client.send_claim_message(
+                            cov.swap_id,
+                            hex::encode(tx.txid()),
+                            chrono::Utc::now().timestamp(),
+                        ).await {
+                            error!("Failed to send Kafka message: {}", e);
+                        }
+                    }
                 }
                 None => {
                     info!(
                         "Output of {} already spent",
                         hex::encode(cov.clone().output_script),
-                    )
+                    );
                 }
             },
             Err(err) => {

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::chain::esplora::EsploraClient;
 use crate::chain::types::ChainBackend;
+use crate::kafka::KafkaClient;
 use dotenvy::dotenv;
 use elements::AddressParams;
 use log::{debug, error, info};
@@ -12,6 +13,7 @@ mod boltz;
 mod chain;
 mod claimer;
 mod db;
+mod kafka;
 mod utils;
 
 pub mod built_info {
@@ -72,6 +74,23 @@ async fn main() {
 
     info!("Connected to chain backend: {}", connect_res.subversion);
 
+    // Initialize Kafka client
+    let kafka_client = match KafkaClient::new(
+        &env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string()),
+        &env::var("KAFKA_TOPIC").unwrap_or_else(|_| "covenant_claims".to_string()),
+        env::var("KAFKA_USERNAME").ok().as_deref(),
+        env::var("KAFKA_PASSWORD").ok().as_deref(),
+    ) {
+        Ok(client) => {
+            info!("Connected to Kafka");
+            Some(client)
+        }
+        Err(err) => {
+            error!("Could not connect to Kafka: {}", err);
+            None
+        }
+    };
+
     let claimer = claimer::Claimer::new(
         db.clone(),
         elements,
@@ -84,6 +103,7 @@ async fn main() {
             .parse::<u64>()
             .expect("SWEEP_INTERVAL invalid"),
         network_params,
+        kafka_client,
     );
     claimer.start();
 

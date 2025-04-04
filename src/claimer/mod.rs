@@ -13,6 +13,7 @@ use crate::chain::types::ChainBackend;
 use crate::claimer::constructor::Constructor;
 use crate::db;
 use crate::db::helpers::get_pending_covenant_for_output;
+use crate::kafka::KafkaClient;
 
 pub mod constructor;
 pub mod tree;
@@ -33,6 +34,7 @@ impl Claimer {
         sweep_time: u64,
         sweep_interval: u64,
         address_param: &'static AddressParams,
+        kafka_client: Option<KafkaClient>,
     ) -> Claimer {
         Claimer {
             constructor: Constructor::new(
@@ -41,6 +43,7 @@ impl Claimer {
                 sweep_time,
                 sweep_interval,
                 address_param,
+                kafka_client,
             ),
             db,
             chain_client,

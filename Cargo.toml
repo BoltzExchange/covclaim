@@ -34,6 +34,9 @@ rayon = "1.10.0"
 num_cpus = "1.16.0"
 async-trait = "0.1.80"
 ratelimit = "0.9.1"
+rdkafka = { version = "0.36.2", features = ["ssl"] }
+uuid = { version = "1.7.0", features = ["v4", "serde"] }
+chrono = "0.4.38"
 
 [patch.crates-io]
 secp256k1-zkp = { git = "https://github.com/BlockstreamResearch/rust-secp256k1-zkp.git", rev = "60e631c24588a0c9e271badd61959294848c665d" }
