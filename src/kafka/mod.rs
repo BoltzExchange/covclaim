@@ -29,11 +29,14 @@ impl KafkaClient {
         config.set("bootstrap.servers", brokers);
         config.set("message.timeout.ms", "5000");
 
+        // Only set up SASL authentication if both username and password are provided
         if let (Some(username), Some(password)) = (username, password) {
-            config.set("security.protocol", "SASL_SSL");
-            config.set("sasl.mechanisms", "PLAIN");
-            config.set("sasl.username", username);
-            config.set("sasl.password", password);
+            if !username.is_empty() && !password.is_empty() {
+                config.set("security.protocol", "SASL_SSL");
+                config.set("sasl.mechanisms", "PLAIN");
+                config.set("sasl.username", username);
+                config.set("sasl.password", password);
+            }
         }
 
         let producer: FutureProducer = config.create()?;
@@ -58,6 +61,9 @@ impl KafkaClient {
         };
 
         let json_message = serde_json::to_string(&message)?;
+
+        log::info!("Sending message - swap_id: {}, claim_tx_id: {}, claim_tx_time: {}", message.swap_id, message.claim_tx_id, message.claim_tx_time);
+        log::debug!("Sending JSON message: {}", json_message);
         
         let record = FutureRecord::to(&self.topic)
             .payload(&json_message)

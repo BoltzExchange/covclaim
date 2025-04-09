@@ -12,6 +12,7 @@ use elements::{
     opcodes, AddressParams, LockTime, OutPoint, Script, Sequence, Transaction, TxIn, TxInWitness,
     TxOut, TxOutWitness,
 };
+use elements::pset::serialize::Serialize;
 use log::{debug, error, info, trace, warn};
 use tokio::time;
 
@@ -151,7 +152,7 @@ impl Constructor {
                     if let Some(kafka_client) = self.kafka_client {
                         if let Err(e) = kafka_client.send_claim_message(
                             cov.swap_id,
-                            hex::encode(tx.txid()),
+                            tx.txid().to_string(),
                             chrono::Utc::now().timestamp(),
                         ).await {
                             error!("Failed to send Kafka message: {}", e);
@@ -240,6 +241,12 @@ impl Constructor {
             None => prevout.asset.explicit().unwrap(),
         };
 
+        debug!(
+            "UTXO value: {}, asset: {}",
+            utxo_value,
+            hex::encode(utxo_asset.serialize())
+        );
+
         let mut outs = Vec::<TxOut>::new();
         outs.push(TxOut {
             nonce: Nonce::Null,
@@ -313,6 +320,13 @@ impl Constructor {
             });
         }
 
+        debug!(
+            "Covenant details - expected amount: {}, expected output: {}, preimage hash: {}",
+            cov_details.expected_amount,
+            hex::encode(&cov_details.expected_output),
+            hex::encode(&cov_details.preimage_hash)
+        );
+
         outs.push(TxOut::new_fee(
             utxo_value - cov_details.expected_amount,
             utxo_asset,
@@ -340,7 +354,7 @@ impl Constructor {
             output: outs,
         };
 
-        let tx_hex = hex::encode(elements::pset::serialize::Serialize::serialize(&tx));
+        let tx_hex = hex::encode(Serialize::serialize(&tx));
         trace!("Broadcasting transaction {}", tx_hex);
 
         let has_been_included = match self.chain_client.send_raw_transaction(tx_hex).await {

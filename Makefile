@@ -22,3 +22,6 @@ db-migrate:
 
 # Build everything from scratch
 all: clean build db-setup db-migrate 
+
+db.local:
+	PGPASSWORD=boltz psql -h localhost --u boltz -p 5431 -d covclaim

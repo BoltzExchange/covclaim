@@ -4,7 +4,7 @@ use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
 use diesel::Connection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 pub const MIGRATIONS_POSTGRES: EmbeddedMigrations = embed_migrations!("./migrations_postgres");
@@ -36,13 +36,7 @@ pub fn establish_connection(url: &str) -> Result<Pool, Box<dyn Error + Send + Sy
     );
 
     debug!("Creating connection manager...");
-    let manager = match ConnectionManager::new(url) {
-        Ok(m) => m,
-        Err(e) => {
-            error!("Failed to create connection manager: {}", e);
-            return Err(e.into());
-        }
-    };
+    let manager = ConnectionManager::new(url);
 
     debug!("Building connection pool...");
     let pool = match Pool::builder().build(manager) {
