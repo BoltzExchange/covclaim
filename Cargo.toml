@@ -28,7 +28,7 @@ elements = { version = "0.24.1", features = ["serde"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
 hex = { version = "0.4.3", features = ["alloc", "serde", "std"] }
 serde_with = "3.8.1"
-crossbeam-channel = "0.5.13"
+crossbeam-channel = "0.5.15"
 r2d2 = "0.8.10"
 rayon = "1.10.0"
 num_cpus = "1.16.0"
